@@ -1,0 +1,15 @@
+# Define files which we do not want Mercurial to track.
+
+# use shell style pattern matching.
+syntax: glob
+
+
+# Object files typically have a .o suffix.
+*.o
+
+# If vim is running, ignore it's swap files.
+*.swp
+
+# Ignore any cscope databases or tags files.
+cscope.out
+tags
