@@ -231,4 +231,105 @@ typedef struct
 }
 __attribute__ (( packed )) fat_direntry_t;
 
+
+/**
+ *  This structure is specific to mfatic, and is used to locate the clusters
+ *  bitmap. 
+ *
+ *  TODO: keep track of whether the bitmap is up to date. If the file system
+ *  was last mounted by a non-mfatic driver, that driver will not have been
+ *  aware of our clusters bitmap, and will not have updated it.
+ */
+typedef struct
+{
+    // sector address of the clusters bitmap, and the size of that bitmap
+    // in sectors.
+    uint16_t	clusters_bitmap;
+    uint16_t	nr_bitmap_sectors;
+}
+__attribute (( packed )) mfatic_info_t;
+
+
+/**
+ *  This structure contains information about a mounted mfatic volume.
+ *  The mfatic fuse daemon will maintain exactly one of these structures,
+ *  as each instance of the daemon is responsible for servicing file
+ *  requests on a single device, specified as a parameter to the mount
+ *  command.
+ */
+typedef struct
+{
+    // block device file descriptor, used by the fuse daemon for reading
+    // and writing on the disk itself.
+    int			dev_fd;
+
+    // permissions for accessing the block device.
+    mode_t		mode;
+
+    // user and group id's of the volumes owner.
+    uid_t		uid;
+    gid_t		gid;
+
+    // pointers to in-memory copies of file system data structures.
+    fat_super_block_t	*bpb;
+    fat_fsinfo_t	*fsinfo;
+    mfatic_info_t	*mfinfo;
+}
+fat_volume_t;
+
+
+/**
+ *  file handle structure. Stores all the information about an open file.
+ *  A pointer to one of these structures is stored in fuse's fuse_file_info
+ *  struct, and used by read and write to identify the file which is the
+ *  target of the operation.
+ */
+typedef struct
+{
+    // pointer to the volume struct of the host file system.
+    fat_volume_t	*v;
+
+    // access mode set by open.
+    int			mode;
+
+    // current offset into the file.
+    off_t		cur_offset;
+
+    // file name. Points to a malloc()ed string.
+    char		*name;
+
+    // linked list of clusters allocated to this file. By reading the
+    // entire list when the file is opened, we avoid having to repeatedly
+    // seek back to the allocation table, improving performance.
+    cluster_list_t	*clusters;
+}
+fat_file_t;
+
+
+// allow clusters from the allocation table to be read into a linked list
+// in memory, allowing faster access to them.
+typedef struct
+{
+    uint32_t		cluster_id;
+    cluster_list_t	*next;
+}
+cluster_list_t;
+
+
+// Procedures exported by this header.
+//
+// locate a file on a device, and fill in the file struct pointed to by the
+// second param. The file struct must have the volume and mode fields filled
+// in before the call to this procedure.
+extern int fat_open ( const char *path, fat_file_t *fd );
+extern int fat_close ( fat_file_t *fd );
+
+// read and write from a file.
+extern int fat_read ( fat_file_t *fd, void *buf, size_t nbytes );
+extern int fat_write ( fat_file_t *fd, const void *buf, size_t nbytes );
+
+// change the current position in a file.
+extern int fat_seek ( fat_file_t *fd, off_t offset, int whence );
+
+
 #endif // MFATIC_FAT_H

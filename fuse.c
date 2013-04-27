@@ -40,8 +40,10 @@ PRIVATE int mfatic_unlink ( const char *name );
 PRIVATE int mfatic_rmdir ( const char *name );
 
 // read the contents of a directory.
+PRIVATE int mfatic_opendir ( const char *path, struct fuse_file_info *fd );
 PRIVATE int mfatic_readdir ( const char *path, void *buf, fuse_fill_dir_t
   *filler, off_t offset, struct fuse_file_info *fd );
+PRIVATE int mfatic_releasedir ( const char *path, struct fuse_file_info *fd );
 
 // rename a file
 PRIVATE int mfatic_rename ( const char *old, const char *new );
@@ -65,7 +67,9 @@ static struct fuse_operations mfatic_ops =
 {
     .getattr	= mfatic_getattr,
     .access	= mfatic_access,
+    .opendir	= mfatic_opendir,
     .readdir	= mfatic_readdir,
+    .releasedir	= mfatic_releasedir,
     .mknod	= mfatic_mknod,
     .mkdir	= mfatic_mkdir,
     .unlink	= mfatic_unlink,
