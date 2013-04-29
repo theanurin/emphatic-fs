@@ -60,10 +60,14 @@ PRIVATE int mfatic_fsync ( const char *path, int datasync,
 PRIVATE int mfatic_flush ( const char *path, struct fuse_file_info *fd );
 
 
+// Pointer to a struct containing information about the mounted file system
+PRIVATE fat_volume_t *v;
+
+
 // This struct is used by the main loop in the FUSE library to dispatch
 // to our methods for handling operations on an mfatic fs, such as open,
 // read write and so on.
-static struct fuse_operations mfatic_ops =
+PRIVATE struct fuse_operations mfatic_ops =
 {
     .getattr	= mfatic_getattr,
     .access	= mfatic_access,
@@ -85,3 +89,104 @@ static struct fuse_operations mfatic_ops =
     .fsync	= mfatic_fsync,
     .flush	= mfatic_flush
 };
+
+
+/**
+ *  Handle a request to open the file at the absolute path (on our device)
+ *  given by the first parameter. This routine creates a new file handle,
+ *  and stores a pointer to it in the struct pointed to by the second
+ *  parameter. This struct (and thus a pointer to the file handle) is
+ *  passed to our read and write handlers to service subsequent operations.
+ *
+ *  Return value is 0 on success, or a negative errno value.
+ */
+    PRIVATE int
+mfatic_open ( path, fd )
+    const char *path;		// path from mount point to the file.
+    struct fuse_file_info *fd;
+{
+    // allocate memory for the file handle.
+    fat_file_t *newfile = safe_malloc ( sizeof ( fat_file_t ) );
+    int retval;
+
+    // fill in the volume and mode fields for fat_open.
+    newfile->v = v;
+    newfile->mode = fd->flags;
+
+    // open the file. If it fails, return an error, and release the now
+    // unneeded file struct back to the pool of free memory.
+    if ( ( retval = fat_open ( path, newfile ) ) != 0 )
+    {
+	safe_free ( newfile );
+	return retval;
+    }
+
+    // save a pointer to the file struct.
+    fd->fh = newfile;
+
+    return 0;
+}
+
+/**
+ *  This method is called when a file is being closed. It releases the
+ *  memory allocated to the file handle struct.
+ */
+    PRIVATE int
+mfatic_release ( path, fd )
+    const char *path;		// absolute path. Unused.
+    struct fuse_file_info *fd;
+{
+    fat_file_t *oldfd = ( fat_file_t * ) fd->fh;
+    cluster_list_t *prev = NULL;
+
+    // release the malloced name field.
+    safe_free ( oldfd->name );
+
+    // step along the list of clusters, and release each entry.
+    for ( cluster_list_t **cs = &( oldfd->clusters );
+      *cs != NULL; cs = &( ( *cs )->next ) )
+    {
+	// We need to free the item *behind* the current item, otherwise
+	// the loop update statement will be dereferencing the pointer
+	// we just free()d, which is a Bad Thing. In this code, prev points
+	// to the previous item, or is NULL when we are on the first item.
+	if ( prev != NULL )
+	    safe_free ( prev );
+
+	// set prev for the next iteration.
+	prev = *cs;
+    }
+
+    // free the last item from the list.
+    safe_free ( prev );
+
+    // release the file struct, and clear the reference in fd.
+    safe_free ( oldfd );
+    fd->fh = NULL;
+
+    return 0;
+}
+
+/**
+ *  Read nbytes from a file, starting at offset bytes from the start, and
+ *  store them in buf.
+ *
+ *  Return value is the number of bytes read, or EOF.
+ */
+    PRIVATE int
+mfatic_read ( name, buf, nbytes, offset, fd )
+    const char *name;		// file name. Unused.
+    char *buf;			// buffer to store data read.
+    int nbytes;			// no of bytes to read.
+    off_t offset;		// where to start reading.
+    struct fuse_file_info *fd;	// file handle.
+{
+    fat_file_t *rf = ( fat_file_t * ) fd->fh;
+
+    // seek to the start offset requested.
+    if ( fat_seek ( rf, offset, SEEK_SET ) != offset )
+	return EOF;
+
+    // read the data.
+    return fat_read ( rf, buf, nbytes );
+}
