@@ -1,7 +1,8 @@
 /**
- *  fuse.c
+ *  mfatic-fuse.c
  *
- *  Fuse methods for the mfatic file system.
+ *  Fuse daemon for mounting an Emphatic file system, and methods for
+ *  carrying out file operations on an Emphatic fs.
  *
  *  Author: Matthew Signorini
  */
@@ -117,7 +118,7 @@ mfatic_open ( path, fd )
     // unneeded file struct back to the pool of free memory.
     if ( ( retval = fat_open ( path, newfile ) ) != 0 )
     {
-	safe_free ( newfile );
+	safe_free ( &newfile );
 	return retval;
     }
 
@@ -140,7 +141,7 @@ mfatic_release ( path, fd )
     cluster_list_t *prev = NULL;
 
     // release the malloced name field.
-    safe_free ( oldfd->name );
+    safe_free ( &( oldfd->name ) );
 
     // step along the list of clusters, and release each entry.
     for ( cluster_list_t **cs = &( oldfd->clusters );
@@ -151,18 +152,17 @@ mfatic_release ( path, fd )
 	// we just free()d, which is a Bad Thing. In this code, prev points
 	// to the previous item, or is NULL when we are on the first item.
 	if ( prev != NULL )
-	    safe_free ( prev );
+	    safe_free ( &prev );
 
 	// set prev for the next iteration.
 	prev = *cs;
     }
 
     // free the last item from the list.
-    safe_free ( prev );
+    safe_free ( &prev );
 
     // release the file struct, and clear the reference in fd.
-    safe_free ( oldfd );
-    fd->fh = NULL;
+    safe_free ( &oldfd );
 
     return 0;
 }
