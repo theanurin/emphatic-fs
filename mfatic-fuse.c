@@ -10,7 +10,9 @@
 #include <fuse.h>
 
 
-#include "mfatic.h"
+#include "utils.h"
+#include "fat.h"
+#include "fileio.h"
 
 
 // Declarations for methods to handle file operations on an mfatic file
@@ -131,6 +133,8 @@ mfatic_open ( path, fd )
 /**
  *  This method is called when a file is being closed. It releases the
  *  memory allocated to the file handle struct.
+ *
+ *  Fuse ignores the return value of this method.
  */
     PRIVATE int
 mfatic_release ( path, fd )
@@ -138,29 +142,10 @@ mfatic_release ( path, fd )
     struct fuse_file_info *fd;
 {
     fat_file_t *oldfd = ( fat_file_t * ) fd->fh;
-    cluster_list_t *prev = NULL;
 
-    // release the malloced name field.
-    safe_free ( &( oldfd->name ) );
-
-    // step along the list of clusters, and release each entry.
-    for ( cluster_list_t **cs = &( oldfd->clusters );
-      *cs != NULL; cs = &( ( *cs )->next ) )
-    {
-	// We need to free the item *behind* the current item, otherwise
-	// the loop update statement will be dereferencing the pointer
-	// we just free()d, which is a Bad Thing. In this code, prev points
-	// to the previous item, or is NULL when we are on the first item.
-	if ( prev != NULL )
-	    safe_free ( &prev );
-
-	// set prev for the next iteration.
-	prev = *cs;
-    }
-
-    // free the last item from the list.
-    safe_free ( &prev );
-
+    // release the memory allocated to the file struct.
+    fat_close ( oldfd );
+    
     // release the file struct, and clear the reference in fd.
     safe_free ( &oldfd );
 
