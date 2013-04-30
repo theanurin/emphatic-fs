@@ -18,10 +18,20 @@
 #define DIR_NAME_LEN	11
 
 
+// Currently, Emphatic is only backward compatible with FAT32; FAT12/16
+// support is yet to be added. The following constants and macros are FAT32
+// specific.
+#ifdef MFATIC_32
+
+// size of a FAT entry in bytes.
+#define FAT_ENTSIZE	    4
+
+// data type for a FAT entry.
+typedef uint32_t fat_entry_t;
+
 // These macros can be used to test if a given entry in the file allocation
 // table corresponds to the last cluster in a file, or a cluster marked as
 // bad.
-#ifdef MFATIC_32
 #define IS_LAST_CLUSTER( entry ) ( ( ( entry ) & 0x0FFFFFFF ) >= 0x0FFFFFF8 )
 #define IS_BAD_CLUSTER( entry )	 ( ( ( entry ) & 0x0FFFFFFF ) == 0x0FFFFFF7 )
 #define IS_FREE_CLUSTER( entry ) ( ( ( entry ) & 0x0FFFFFFF ) == 0x00000000 )
@@ -29,6 +39,7 @@
 // sentinels for the last cluster or a bad cluster.
 #define END_CLUSTER_MARK    0x0FFFFFF8
 #define BAD_CLUSTER_MARK    0x0FFFFFF7
+
 #endif // MFATIC_32
 
 
@@ -67,6 +78,14 @@
 #define DATE_YEAR( d )	    ( ( ( ( d ) & 0xFE00 ) >> 9 ) + 1980 )
 #define DATE_MONTH( d )	    ( ( ( d ) & 0x01E0 ) >> 5 )
 #define DATE_DAY( d )	    ( ( d ) & 0x001F )
+
+
+// given a fat_volume_t structure, fetch the first sector of the file
+// allocation table.
+#define FAT_START( v )	    ( ( v )->bpb->nr_reserved_secs )
+
+// fetch the size of a sector in bytes.
+#define SECTOR_SIZE( v )    ( ( v )->bpb->bps )
 
 
 /**
@@ -292,9 +311,6 @@ typedef struct
     // access mode set by open.
     int			mode;
 
-    // current offset into the file.
-    off_t		cur_offset;
-
     // file name. Points to a malloc()ed string.
     char		*name;
 
@@ -302,6 +318,12 @@ typedef struct
     // entire list when the file is opened, we avoid having to repeatedly
     // seek back to the allocation table, improving performance.
     cluster_list_t	*clusters;
+
+    // size of the file in bytes.
+    size_t		fsize;
+    
+    // current offset into the file.
+    off_t		cur_offset;
 }
 fat_file_t;
 
@@ -310,7 +332,7 @@ fat_file_t;
 // in memory, allowing faster access to them.
 typedef struct
 {
-    uint32_t		cluster_id;
+    fat_entry_t		cluster_id;
     cluster_list_t	*next;
 }
 cluster_list_t;
