@@ -27,6 +27,6 @@ extern int fat_read ( fat_file_t *fd, void *buf, size_t nbytes );
 extern int fat_write ( fat_file_t *fd, const void *buf, size_t nbytes );
 
 // change the current position in a file.
-extern int fat_seek ( fat_file_t *fd, off_t offset, int whence );
+extern off_t fat_seek ( fat_file_t *fd, off_t offset, int whence );
 
 #endif // MFATIC_FILEIO_H

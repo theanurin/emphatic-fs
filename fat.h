@@ -87,6 +87,22 @@ typedef uint32_t fat_entry_t;
 // fetch the size of a sector in bytes.
 #define SECTOR_SIZE( v )    ( ( v )->bpb->bps )
 
+// fetch the cluster size in bytes.
+#define CLUSTER_SIZE( v )   ( ( v )->bpb->bps * ( v )->bpb->spc )
+
+// get the offset, in bytes, of the first data cluster.
+#define DATA_START( v )	    ( ( ( v )->bpb->nr_reserved_secs + ( \
+	  ( v )->bpb->nrFATs * ( v )->bpb->sectors_per_fat ) ) * \
+      SECTOR_SIZE ( v ) )
+
+// get the offset in bytes of a given cluster on a given volume.
+// first parameter points to the volume struct, second to a cluster list
+// struct. Note that the clusters start at index 2, because the first two
+// entries in the FAT are reserved. This is why we subtract 2 from the
+// cluster index.
+#define CLUSTER_OFFSET( v, cl )	\
+    ( DATA_START ( v ) + CLUSTER_SIZE ( v ) * ( ( cl )->cluster_id - 2)
+
 
 /**
  *  FAT32 Bios Parameter Block.
@@ -320,10 +336,10 @@ typedef struct
     cluster_list_t	*clusters;
 
     // size of the file in bytes.
-    size_t		fsize;
+    size_t		size;
     
     // current offset into the file.
-    off_t		cur_offset;
+    off_t		offset;
 }
 fat_file_t;
 
