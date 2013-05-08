@@ -20,6 +20,8 @@
 
 // local function declarations.
 PRIVATE off_t set_offset ( fat_file_t *fd, off_t newoff );
+PRIVATE void update_current_cluster ( fat_file_t *fd );
+PRIVATE size_t count_clusters ( fat_volume_t *v, size_t nbytes );
 
 
 /**
@@ -101,6 +103,11 @@ fat_open ( path, fd )
 	this_cluster = FAT [ fat_offset ];
     }
 
+    // store the file size, and set the current offset to 0.
+    fd->size = ( size_t ) dir.size;
+    fd->offset = 0;
+    fd->current_cluster = fd->clusters;
+
     return 0;
 }
 
@@ -148,17 +155,9 @@ fat_read ( fd, buffer, nbytes )
     void *buffer;	// buffer to store bytes read.
     size_t nbytes;	// number of bytes to read.
 {
-    cluster_list_t *rc = fd->clusters;
+    cluster_list_t *rc = fd->current_cluster;
     size_t cluster_size = CLUSTER_SIZE ( fd->v );
     size_t total_read = 0;
-
-    // locate the cluster based on the current offset.
-    for ( int i = 0; 
-      ( rc != NULL ) && ( i != fd->offset / cluster_size ); 
-      i ++, rc = rc->next )
-    {
-	;
-    }
 
     // initial read block is either nbytes or the number of bytes remaining
     // in the first cluster, whichever is smaller.
@@ -169,13 +168,17 @@ fat_read ( fd, buffer, nbytes )
     while ( ( nbytes > 0 ) && ( rc != NULL ) )
     {
 	// seek to the cluster, and read.
-	safe_seek ( fd->v->dev_fd, CLUSTER_OFFSET ( fd->v, rc ), SEEK_SET );
+	safe_seek ( fd->v->dev_fd, CLUSTER_OFFSET ( fd->v, rc ) + (
+	      fd->offset % cluster_size ), SEEK_SET );
 	safe_read ( fd->v->dev_fd, buffer, nread );
 
 	// update the variables.
 	nbytes -= nread;
 	buffer += nread;
 	total_read += nread;
+
+	// update the file offset.
+	fd->offset += nread;
 
 	// next chunk to read is either nbytes or a full cluster, whichever
 	// is smaller.
@@ -185,7 +188,80 @@ fat_read ( fd, buffer, nbytes )
 	rc = rc->next;
     }
 
+    // update the current cluster field in the file descriptor, if
+    // necessary.
+    update_current_cluster ( fd );
+
     return total_read;
+}
+
+/**
+ *  Write bytes to a file. If neccessary, additional clusters will be
+ *  allocated to the file to accomodate the data being written.
+ */
+    PUBLIC size_t
+fat_write ( fd, buffer, nbytes )
+    fat_file_t *fd;	// file descriptor to write to.
+    const void *buffer;	// data to write.
+    int nbytes;		// no of bytes to be written.
+{
+    cluster_list_t *wc = fd->current_cluster;
+    size_t cluster_size = CLUSTER_SIZE ( fd->v );
+    size_t nr_clusters = count_clusters ( fd->v, fd->size );
+    size_t alloc_bytes;
+    size_t total_written = 0;
+
+    // will this write operation go past EOF? If so, we will have to
+    // allocate additional clusters to accomodate the data to be written.
+    if ( ( fd->offset + ( off_t ) nbytes ) >= ( off_t )( nr_clusters * 
+	  cluster_size ) )
+    {
+	// work out how many new clusters we need. Fairly simple maths,
+	// but remember that we need to allocate a cluster for a partial
+	// fill.
+	alloc_bytes = ( fd->offset + ( off_t ) nbytes ) - ( off_t )(
+	  nr_clusters * cluster_size );
+	nr_clusters = count_clusters ( fd->v, alloc_bytes );
+
+	// allocate new clusters.
+	alloc_clusters ( fd, nr_clusters );
+    }
+
+    // the first chunk to be written will be either nbytes or the remaining
+    // size in the current cluster, whichever is smaller.
+    nwrite = ( nbytes <= ( cluster_size - fd->offset % cluster_size ) ) ?
+	nbytes : ( cluster_size - fd->offset % cluster_size );
+
+    // write out the data cluster by cluster.
+    while ( ( nbytes > 0 ) && ( wc != NULL ) )
+    {
+	// seek to the correct offset within the correct cluster, as 
+	// defined by the file offset.
+	safe_seek ( fd->v->dev_fd, CLUSTER_OFFSET ( fd->v, wc ) + (
+	      fd->offset % cluster_size ), SEEK_SET );
+	safe_write ( fd->v->dev_fd, buffer, nwrite );
+
+	// update variables to track how much we still have to write.
+	nbytes -= nwrite;
+	buffer += nwrite;
+	total_written += nwrite;
+
+	// update the file offset.
+	fd->offset += nwrite;
+
+	// the next chunk to be written is either a full cluster, or
+	// nbytes, whichever is smaller.
+	nwrite = ( nbytes <= cluster_size ) ? nbytes : cluster_size;
+
+	// step to the next cluster.
+	wc = wc->next;
+    }
+
+    // Update the current cluster, so that it is consistent with the file
+    // offset.
+    update_current_cluster ( fd );
+
+    return total_written;
 }
 
 /**
@@ -201,27 +277,34 @@ fat_seek ( fd, offset, whence )
     off_t offset;	// offset to seek to.
     int whence;		// SEEK_SET, SEEK_CUR or SEEK_END.
 {
+    off_t retval;
+
     switch ( whence )
     {
     case SEEK_SET:
 	// change offset to offset bytes from the start of the file.
-	return set_offset ( fd, offset );
+	retval = set_offset ( fd, offset );
 	break;
 
     case SEEK_CUR:
 	// add offset to the current file offset.
-	return set_offset ( fd, fd->offset + offset );
+	retval = set_offset ( fd, fd->offset + offset );
 	break;
 
     case SEEK_END:
 	// The offset parameter is presumably <= 0 in this case, because
 	// if not, they are seeking past EOF, which is not allowed.
-	return set_offset ( fd, ( fd->size - 1 ) + offset );
+	retval = set_offset ( fd, ( fd->size - 1 ) + offset );
 	break;
 
     default:
 	return -EINVAL;
     }
+
+    // update the file descriptor's current cluster field.
+    update_current_cluster ( fd );
+
+    return retval;
 }
 
 /**
@@ -243,4 +326,49 @@ set_offset ( fd, newoff )
     {
 	return -EINVAL;
     }
+}
+
+/**
+ *  Set the current cluster field of the file descriptor given as a param
+ *  to point to the cluster list entry corresponding to the current file
+ *  offset (as stored in the file descriptor).
+ */
+    PRIVATE void
+update_current_cluster ( fd )
+    fat_file_t *fd;	// file descriptor to be updated.
+{
+    cluster_list_t *cp;
+    off_t i;
+
+    // step through the first n clusters in the cluster list, where n is
+    // the number of clusters before the file offset.
+    for ( i = 0, cp = fd->clusters;
+      ( i != fd->offset / CLUSTER_SIZE ( fd->v ) ) && ( cp != NULL );
+      i += 1, cp = cp->next )
+    {
+	;
+    }
+
+    // cp now points to the cluster where subsequent read or write 
+    // operations should start.
+    fd->current_cluster = cp;
+}
+
+/**
+ *  Count how many clusters are required to store a certain number of
+ *  bytes. Return value is the number of clusters.
+ */
+    PRIVATE size_t
+count_clusters ( v, nbytes )
+    fat_volume_t *v;	// volume descriptor. needed for cluster size.
+    size_t nbytes;	// count of bytes being stored.
+{
+    size_t clusters = nbytes / CLUSTER_SIZE ( v );
+
+    // Note that integer division truncates down. This means that if the
+    // buffer partially fills a cluster at the end, we need to add one to
+    // this count.
+    clusters += ( ( nbytes % CLUSTER_SIZE ( v ) ) != 0 ) ? 1 : 0;
+
+    return clusters;
 }

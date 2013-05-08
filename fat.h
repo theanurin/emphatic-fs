@@ -335,6 +335,10 @@ typedef struct
     // seek back to the allocation table, improving performance.
     cluster_list_t	*clusters;
 
+    // pointer to the list entry of the cluster where the next read or
+    // write operation will take place.
+    cluster_list_t	*current_cluster;
+
     // size of the file in bytes.
     size_t		size;
     
