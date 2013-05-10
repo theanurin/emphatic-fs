@@ -16,6 +16,22 @@
 
 
 /**
+ *  wrapper to open system call. Only returns a valid file descriptor.
+ */
+    PUBLIC int
+safe_open ( path, flags )
+    const char *path;	// file path for syscall.
+    int flags;		// mode, etc.
+{
+    int fd;
+
+    if ( ( fd = open ( path, flags ) ) == -1 )
+	err ( errno, "Couldn't open %s", path );
+
+    return fd;
+}
+
+/**
  *  wrapper for malloc. Catches return value of NULL.
  */
     PUBLIC void *
@@ -49,6 +65,7 @@ safe_free ( freepp )
     {
 	// no. free it.
 	free ( *freepp );
+	*freepp = NULL;
 	return;
     }
 
