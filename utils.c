@@ -32,6 +32,68 @@ safe_open ( path, flags )
 }
 
 /**
+ *  wrapper for the close system call. Aborts on errors.
+ */
+    PUBLIC void
+safe_close ( path, fd )
+    const char *path;	// displayed in an error message on failure.
+    int fd;		// file descriptor to close.
+{
+    if ( close ( fd ) != 0 )
+	err ( errno, "Error closing file \"%s\"", path );
+}
+
+/**
+ *  The next two procedures are wrappers for read and write, much the same
+ *  as above.
+ */
+    PUBLIC size_t
+safe_read ( fd, buffer, count )
+    int fd;		// file descriptor to read from.
+    void *buffer;	// buffer to store data read.
+    size_t count;	// number of bytes to be read.
+{
+    size_t nread;
+
+    if ( ( nread = read ( fd, buffer, count ) ) == -1 )
+	err ( errno, "Error during read system call" );
+
+    return nread;
+}
+
+    PUBLIC size_t
+safe_write ( fd, buffer, count )
+    int fd;		// file descriptor to write to.
+    const void *buffer;	// data to write to the file.
+    size_t count;	// number of bytes to write.
+{
+    size_t nwritten;
+
+    if ( ( nwritten = write ( fd, buffer, count ) ) == -1 )
+	err ( errno, "Error during write system call" );
+
+    return nwritten;
+}
+
+/**
+ *  wrapper to the lseek system call. Return value is the new offset into
+ *  the file. This procedure aborts on failure.
+ */
+    PUBLIC off_t
+safe_seek ( fd, offset, whence )
+    int fd;		// file to seek on.
+    off_t offset;	// offset by which to move the current position.
+    int whence;		// where to seek relative to.
+{
+    off_t new_off;
+
+    if ( ( new_off = lseek ( fd, offset, whence ) ) == -1 )
+	err ( errno, "Error during lseek system call" );
+
+    return new_off;
+}
+
+/**
  *  wrapper for malloc. Catches return value of NULL.
  */
     PUBLIC void *
