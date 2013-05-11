@@ -268,24 +268,6 @@ __attribute__ (( packed )) fat_direntry_t;
 
 
 /**
- *  This structure is specific to mfatic, and is used to locate the clusters
- *  bitmap. 
- *
- *  TODO: keep track of whether the bitmap is up to date. If the file system
- *  was last mounted by a non-mfatic driver, that driver will not have been
- *  aware of our clusters bitmap, and will not have updated it.
- */
-typedef struct
-{
-    // sector address of the clusters bitmap, and the size of that bitmap
-    // in sectors.
-    uint16_t	clusters_bitmap;
-    uint16_t	nr_bitmap_sectors;
-}
-__attribute (( packed )) mfatic_info_t;
-
-
-/**
  *  This structure contains information about a mounted mfatic volume.
  *  The mfatic fuse daemon will maintain exactly one of these structures,
  *  as each instance of the daemon is responsible for servicing file
@@ -308,7 +290,6 @@ typedef struct
     // pointers to in-memory copies of file system data structures.
     fat_super_block_t	*bpb;
     fat_fsinfo_t	*fsinfo;
-    mfatic_info_t	*mfinfo;
 }
 fat_volume_t;
 
@@ -338,6 +319,9 @@ typedef struct
     // pointer to the list entry of the cluster where the next read or
     // write operation will take place.
     cluster_list_t	*current_cluster;
+
+    // Number of processes that have this file open.
+    unsigned		refcount;
 
     // size of the file in bytes.
     size_t		size;
