@@ -18,6 +18,7 @@
 #include <assert.h>
 #include <err.h>
 
+#include "const.h"
 #include "utils.h"
 
 
