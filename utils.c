@@ -8,6 +8,12 @@
  *  Author: Matthew Signorini
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include <unistd.h>
+
 #include <stdlib.h>
 #include <assert.h>
 #include <err.h>

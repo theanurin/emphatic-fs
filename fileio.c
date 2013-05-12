@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include "const.h"
+#include "utils.h"
 #include "fat.h"
 #include "fileio.h"
 
