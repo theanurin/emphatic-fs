@@ -48,17 +48,25 @@ fat_lookup_dir ( v, path, d )
     *file = '\0';
     file += 1;
 
-    // now recursively locate the directory entry for the parent dir.
-    if ( ( retval = fat_lookup_dir ( v, path, &parent_entry ) ) != 0 )
+    // open the parent directory.
+    if ( ( retval = fat_open ( path, &parent_fd ) ) != 0 )
 	return retval;
 
-    // open the parent directory.
-    if ( ( retval = fat_open ( &parent_entry, &parent_fd ) ) != 0 )
+    // check the parent file descriptor's attribute bits, to make sure
+    // it is a directory, not a mangled path.
+    if ( ( retval = check_directory_attr ( &parent_fd ) ) != 0 )
+    {
+	// bad path. close the file descriptor and return an error.
+	fat_close ( parent_fd );
 	return retval;
+    }
 
     // search the parent directory for our file's entry.
     if ( ( retval = dir_search ( parent_fd, file, d ) ) != 0 )
+    {
+	fat_close ( parent_fd );
 	return retval;
+    }
 
     // now restore the path we were given as a parameter back to it's
     // original state.

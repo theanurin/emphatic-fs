@@ -320,6 +320,9 @@ typedef struct
     // write operation will take place.
     cluster_list_t	*current_cluster;
 
+    // file directory entry.
+    fat_direntry_t	*entry;
+
     // Number of processes that have this file open.
     unsigned		refcount;
 
