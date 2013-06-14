@@ -11,6 +11,9 @@
 #define MFATIC_FAT_ALLOC_H
 
 
+// initialise the map of the free space on a given volume.
+extern void init_clusters_map ( fat_volume_t *v );
+
 // Find the unallocated cluster closest to near, and mark it as allocated.
 // return value is the cluster index of the cluster that was allocated.
 extern fat_cluster_t new_cluster ( fat_volume_t *v, fat_cluster_t near );

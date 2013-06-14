@@ -81,8 +81,9 @@ typedef uint32_t fat_entry_t;
 
 
 // given a fat_volume_t structure, fetch the first sector of the file
-// allocation table.
+// allocation table, or the number of sectors in the FAT.
 #define FAT_START( v )	    ( ( v )->bpb->nr_reserved_secs )
+#define FAT_SECTORS( v )    ( ( v )->bpb->sectors_per_fat )
 
 // fetch the size of a sector in bytes.
 #define SECTOR_SIZE( v )    ( ( v )->bpb->bps )
