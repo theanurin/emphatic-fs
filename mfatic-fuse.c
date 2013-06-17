@@ -73,25 +73,25 @@ PRIVATE fat_volume_t *v;
 // read write and so on.
 PRIVATE struct fuse_operations mfatic_ops =
 {
-    .getattr	= mfatic_getattr,
-    .access	= mfatic_access,
-    .opendir	= mfatic_opendir,
-    .readdir	= mfatic_readdir,
-    .releasedir	= mfatic_releasedir,
-    .mknod	= mfatic_mknod,
-    .mkdir	= mfatic_mkdir,
-    .unlink	= mfatic_unlink,
-    .rmdir	= mfatic_rmdir,
-    .rename	= mfatic_rename,
-    .truncate	= mfatic_truncate,
-    .utime	= mfatic_utime,
-    .open	= mfatic_open,
-    .read	= mfatic_read,
-    .write	= mfatic_write,
-    .release	= mfatic_release,
-    .statfs	= mfatic_statfs,
-    .fsync	= mfatic_fsync,
-    .flush	= mfatic_flush
+    .getattr    = mfatic_getattr,
+    .access     = mfatic_access,
+    .opendir    = mfatic_opendir,
+    .readdir    = mfatic_readdir,
+    .releasedir = mfatic_releasedir,
+    .mknod      = mfatic_mknod,
+    .mkdir      = mfatic_mkdir,
+    .unlink     = mfatic_unlink,
+    .rmdir      = mfatic_rmdir,
+    .rename     = mfatic_rename,
+    .truncate   = mfatic_truncate,
+    .utime      = mfatic_utime,
+    .open       = mfatic_open,
+    .read       = mfatic_read,
+    .write      = mfatic_write,
+    .release    = mfatic_release,
+    .statfs     = mfatic_statfs,
+    .fsync      = mfatic_fsync,
+    .flush      = mfatic_flush
 };
 
 
@@ -106,7 +106,7 @@ PRIVATE struct fuse_operations mfatic_ops =
  */
     PRIVATE int
 mfatic_open ( path, fd )
-    const char *path;		// path from mount point to the file.
+    const char *path;           // path from mount point to the file.
     struct fuse_file_info *fd;
 {
     // allocate memory for the file handle.
@@ -121,8 +121,8 @@ mfatic_open ( path, fd )
     // unneeded file struct back to the pool of free memory.
     if ( ( retval = fat_open ( path, newfile ) ) != 0 )
     {
-	safe_free ( &newfile );
-	return retval;
+        safe_free ( &newfile );
+        return retval;
     }
 
     // save a pointer to the file struct.
@@ -139,7 +139,7 @@ mfatic_open ( path, fd )
  */
     PRIVATE int
 mfatic_release ( path, fd )
-    const char *path;		// absolute path. Unused.
+    const char *path;           // absolute path. Unused.
     struct fuse_file_info *fd;
 {
     fat_file_t *oldfd = ( fat_file_t * ) fd->fh;
@@ -161,18 +161,21 @@ mfatic_release ( path, fd )
  */
     PRIVATE int
 mfatic_read ( name, buf, nbytes, offset, fd )
-    const char *name;		// file name. Unused.
-    char *buf;			// buffer to store data read.
-    int nbytes;			// no of bytes to read.
-    off_t offset;		// where to start reading.
-    struct fuse_file_info *fd;	// file handle.
+    const char *name;           // file name. Unused.
+    char *buf;                  // buffer to store data read.
+    int nbytes;                 // no of bytes to read.
+    off_t offset;               // where to start reading.
+    struct fuse_file_info *fd;  // file handle.
 {
     fat_file_t *rf = ( fat_file_t * ) fd->fh;
 
     // seek to the start offset requested.
     if ( fat_seek ( rf, offset, SEEK_SET ) != offset )
-	return EOF;
+        return EOF;
 
     // read the data.
     return fat_read ( rf, buf, nbytes );
 }
+
+
+// vim: ts=4 sw=4 et

@@ -4,27 +4,29 @@
 # Author: Matthew Signorini
 #
 
-SRC = mfatic-fuse.c fileio.c utils.c
+SRC = mfatic-fuse.c fileio.c directory.c fat_alloc.c utils.c
 OBJS = $(SRC:%.c=%.o)
 
 CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -D_FILE_OFFSET_BITS=64
 
+PROG = mfatic-fuse
 
-.PHONY:		clean scrub tags
 
-mfatic-fuse:	$(SRC)
-	$(CC) $(CFLAGS) -o mfatic-fuse $(OBJS)
+all:		Depend $(PROG) tags
+
+$(PROG):	$(SRC)
+	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
 
 clean:
 	/bin/rm $(OBJS)
 
 scrub:		clean
-	/bin/rm mfatic-fuse
+	/bin/rm $(PROG)
 
 # Use cscope to build a tags database. If you do not have cscope installed
 # at your site, you may wish to change this to invoke ctags instead.
-tags:
+tags:		$(SRC)
 	cscope -b
 
 # Use gcc to figure out what header files each source file depends on. The
@@ -34,5 +36,9 @@ tags:
 Depend:		$(SRC)
 	gcc $(CFLAGS) -MM $(SRC) > Depend
 
+.PHONY:		all clean scrub tags
+
 
 include Depend
+
+# vim: ts=8 sw=4 noet

@@ -1,3 +1,5 @@
 mfatic-fuse.o: mfatic-fuse.c const.h utils.h fat.h fileio.h
 fileio.o: fileio.c const.h utils.h fat.h fileio.h
+directory.o: directory.c const.h utils.h fat.h directory.h
+fat_alloc.o: fat_alloc.c const.h fat.h fat_alloc.h utils.h
 utils.o: utils.c const.h utils.h

@@ -11,6 +11,7 @@
 #ifndef MFATIC_DIRECTORY_H
 #define MFATIC_DIRECTORY_H
 
+
 // needed for definitions of volume and direntry structs.
 #include "fat.h"
 
@@ -19,4 +20,7 @@
 extern int fat_lookup_dir ( fat_volume_t *v, const char *path, 
   fat_direntry_t *d );
 
+
 #endif // MFATIC_DIRECTORY_H
+
+// vim: ts=4 sw=4 et

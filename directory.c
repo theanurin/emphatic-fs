@@ -21,9 +21,9 @@
  */
     PUBLIC int
 fat_lookup_dir ( v, path, d )
-    fat_volume_t *v;	// information about the volume.
-    const char *path;	// file name to look up.
-    fat_direntry_t *d;	// pointer to the direntry struct to be filled in.
+    fat_volume_t *v;    // information about the volume.
+    const char *path;   // file name to look up.
+    fat_direntry_t *d;  // pointer to the direntry struct to be filled in.
 {
     char *file;
     fat_direntry_t parent_entry;
@@ -32,9 +32,9 @@ fat_lookup_dir ( v, path, d )
     // when we are looking up the root directory.
     if ( *path == '\0' )
     {
-	// fill in the directory structure with dummy values, as the root
-	// directory does not *actually* ocurr in any directory.
-	return root_direntry ( v, d );
+        // fill in the directory structure with dummy values, as the root
+        // directory does not *actually* ocurr in any directory.
+        return root_direntry ( v, d );
     }
 
     // step backwards through the path until we find the '/' separator.
@@ -43,29 +43,29 @@ fat_lookup_dir ( v, path, d )
     // and the file we have to look up is the string to the right of the
     // null byte.
     for ( file = path + strlen ( path ); *file != '/'; file -= 1 )
-	;
+        ;
 
     *file = '\0';
     file += 1;
 
     // open the parent directory.
     if ( ( retval = fat_open ( path, &parent_fd ) ) != 0 )
-	return retval;
+        return retval;
 
     // check the parent file descriptor's attribute bits, to make sure
     // it is a directory, not a mangled path.
     if ( ( retval = check_directory_attr ( &parent_fd ) ) != 0 )
     {
-	// bad path. close the file descriptor and return an error.
-	fat_close ( parent_fd );
-	return retval;
+        // bad path. close the file descriptor and return an error.
+        fat_close ( parent_fd );
+        return retval;
     }
 
     // search the parent directory for our file's entry.
     if ( ( retval = dir_search ( parent_fd, file, d ) ) != 0 )
     {
-	fat_close ( parent_fd );
-	return retval;
+        fat_close ( parent_fd );
+        return retval;
     }
 
     // now restore the path we were given as a parameter back to it's
@@ -74,3 +74,6 @@ fat_lookup_dir ( v, path, d )
 
     return 0;
 }
+
+
+// vim: ts=4 sw=4 et
