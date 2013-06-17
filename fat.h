@@ -314,6 +314,9 @@ typedef struct
     // file name. Points to a malloc()ed string.
     char            *name;
 
+    // Each file can be uniquely identified based on the starting cluster.
+    fat_entry_t     inode;
+
     // linked list of clusters allocated to this file. By reading the
     // entire list when the file is opened, we avoid having to repeatedly
     // seek back to the allocation table, improving performance.
@@ -325,9 +328,6 @@ typedef struct
 
     // file directory entry.
     fat_direntry_t  *entry;
-
-    // Number of processes that have this file open.
-    unsigned        refcount;
 
     // size of the file in bytes.
     size_t          size;

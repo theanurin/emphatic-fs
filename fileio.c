@@ -6,9 +6,6 @@
  *  Author: Matthew Signorini
  */
 
-// this feature test macro tells the system headers to make off_t a 64
-// bit number, so that we can use offsets greater that +/- 2 GB.
-#define _FILE_OFFSET_BITS   64
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -19,10 +16,26 @@
 #include "fileio.h"
 
 
+// This data structure will be used to keep track of how many clients
+// have a given file open, and prevent having duplicate fat_file_t's.
+struct file_table_entry
+{
+    fat_file_t                  *file;
+    unsigned int                refcount;
+    struct file_table_entry     *next;
+};
+
+
 // local function declarations.
 PRIVATE off_t set_offset ( fat_file_t *fd, off_t newoff );
 PRIVATE void update_current_cluster ( fat_file_t *fd );
 PRIVATE size_t count_clusters ( fat_volume_t *v, size_t nbytes );
+PRIVATE size_t do_io ( fat_volume_t *fd, size_t nbytes, void *buffer,
+  size_t ( *safe_io ) ( int dev_fd, void *buf, size_t count ) );
+
+
+// global list of files that are currently open.
+struct file_table_entry *files_list;
 
 
 /**
@@ -42,7 +55,7 @@ fat_open ( path, fd )
     fat_entry_t FAT [ BUF_SIZE ];
     off_t fat_offset, fat_segment, next_segment;
     fat_entry_t this_cluster;
-    cluster_list_t **next_cluster = &( fd->clusters );
+    cluster_list_t **next_item = &( fd->clusters );
 
     // obtain the directory entry corresponding to the file being opened.
     if ( ( retval = fat_lookup_dir ( fd->v, path, &dir ) ) != 0 )
@@ -61,47 +74,20 @@ fat_open ( path, fd )
 
     // read the chain of cluster addresses from the file allocation table
     // on the disk, and store them in a linked list in memory, to minimise
-    // seek operations on the disk. Provided the cluster chain is not
-    // humungously long, and the file's clusters are localised, this code
-    // will be fairly efficient, as our buffering of segments of the FAT
-    // requires very few disk accesses if all of the file's FAT entries are
-    // near each other.
+    // seek operations on the disk later on. 
     this_cluster = ( dir.cluster_msb << 16 ) | ( dir.cluster_lsb );
 
     while ( IS_LAST_CLUSTER ( this_cluster ) == 0 )
     {
         // link a new item into the clusters list.
-        *next_cluster = safe_malloc ( sizeof ( cluster_list_t ) );
-        ( *next_cluster )->cluster_id = this_cluster;
-        ( *next_cluster )->next = NULL;
-        next_cluster = &( ( *next_cluster )->next );
+        *next_item = safe_malloc ( sizeof ( cluster_list_t ) );
+        ( *next_item )->cluster_id = this_cluster;
+        ( *next_item )->next = NULL;
+        next_item = &( ( *next_item )->next );
 
-        // calculate offset into FAT of next entry, in bytes.
-        fat_offset = this_cluster * FAT_ENTSIZE;
-
-        // calculate the segment of the FAT where the next entry is. If
-        // it is the same segment we have in memory, we don't need to read
-        // it from disk again.
-        next_segment = fat_offset / BUF_SIZE;
-
-        if ( next_segment != fat_segment )
-        {
-            // read the new segment from the disk into our buffer.
-            // first, seek to the correct location on the disk.
-            safe_seek ( fd->v->dev_fd, 
-              FAT_START ( fd->v ) * SECTOR_SIZE ( fd->v ) + 
-              next_segment * BUF_SIZE * sizeof ( fat_entry_t ), 
-              SEEK_SET );
-            safe_read ( fd->v->dev_fd, FAT, BUF_SIZE * 
-              sizeof ( fat_entry_t ) );
-
-            fat_segment = next_segment
-        }
-
-        // offset of the next cluster address into our buffer.
-        fat_offset %= BUF_SIZE;
-
-        this_cluster = FAT [ fat_offset ];
+        // The allocation table cell at index this_cluster contains the
+        // index for the next cluster in the chain.
+        this_cluster = get_fat_entry ( this_cluster );
     }
 
     // store the file size, and set the current offset to 0.
