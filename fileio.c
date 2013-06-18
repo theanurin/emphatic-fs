@@ -30,8 +30,8 @@ struct file_table_entry
 PRIVATE off_t set_offset ( fat_file_t *fd, off_t newoff );
 PRIVATE void update_current_cluster ( fat_file_t *fd );
 PRIVATE size_t count_clusters ( fat_volume_t *v, size_t nbytes );
-PRIVATE size_t do_io ( fat_volume_t *fd, size_t nbytes, void *buffer,
-  size_t ( *safe_io ) ( int dev_fd, void *buf, size_t count ) );
+PRIVATE size_t do_io ( fat_file_t *fd, size_t nbytes, void *buffer,
+  size_t ( *safe_io ) ( int, void *, size_t ) );
 
 
 // global list of files that are currently open.
@@ -77,7 +77,7 @@ fat_open ( path, fd )
     // seek operations on the disk later on. 
     this_cluster = ( dir.cluster_msb << 16 ) | ( dir.cluster_lsb );
 
-    while ( IS_LAST_CLUSTER ( this_cluster ) == 0 )
+    while ( IS_LAST_CLUSTER ( this_cluster ) == false )
     {
         // link a new item into the clusters list.
         *next_item = safe_malloc ( sizeof ( cluster_list_t ) );
@@ -115,10 +115,9 @@ fat_close ( fd )
     safe_free ( &( fd->name ) );
 
     // step through the cluster list, releasing the items as we go.
-    for ( cluster_list_t **cpp = &( fd->clusters ); *cpp != NULL;
-      cpp = &( ( *cpp )->next ) )
+    for ( cluster_list_t *cp = fd->clusters; cp != NULL; cp = cp->next )
     {
-        // We can't just free *cpp, because then the loop update statement
+        // We can't just free cp, because then the loop update statement
         // would be accessing memory that has been freed, so we will keep
         // a variable prev which points to the item behind the current
         // item. This *can* safely be freed, except on the first iteration,
@@ -127,8 +126,10 @@ fat_close ( fd )
             safe_free ( &prev );
 
         // set up prev for the next iteration.
-        prev = *cpp;
+        prev = cp;
     }
+
+    safe_free ( &prev );
 
     return 0;
 }
@@ -142,42 +143,10 @@ fat_read ( fd, buffer, nbytes )
     void *buffer;       // buffer to store bytes read.
     size_t nbytes;      // number of bytes to read.
 {
-    cluster_list_t *rc = fd->current_cluster;
-    size_t cluster_size = CLUSTER_SIZE ( fd->v );
-    size_t total_read = 0;
+    size_t total_read;
 
-    // initial read block is either nbytes or the number of bytes remaining
-    // in the first cluster, whichever is smaller.
-    nread = ( nbytes <= ( cluster_size - fd->offset % cluster_size ) ) ?
-        nbytes : cluster_size - fd->offset % cluster_size;
-
-    // start reading clusters.
-    while ( ( nbytes > 0 ) && ( rc != NULL ) )
-    {
-        // seek to the cluster, and read.
-        safe_seek ( fd->v->dev_fd, CLUSTER_OFFSET ( fd->v, rc ) + (
-              fd->offset % cluster_size ), SEEK_SET );
-        safe_read ( fd->v->dev_fd, buffer, nread );
-
-        // update the variables.
-        nbytes -= nread;
-        buffer += nread;
-        total_read += nread;
-
-        // update the file offset.
-        fd->offset += nread;
-
-        // next chunk to read is either nbytes or a full cluster, whichever
-        // is smaller.
-        nread = ( nbytes <= cluster_size ) ? nbytes : cluster_size;
-
-        // step to the next cluster.
-        rc = rc->next;
-    }
-
-    // update the current cluster field in the file descriptor, if
-    // necessary.
-    update_current_cluster ( fd );
+    // transfer clusters from the volume to the buffer using safe_read.
+    total_read = do_io ( fd, nbytes, buffer, &safe_read );
 
     return total_read;
 }
@@ -192,11 +161,9 @@ fat_write ( fd, buffer, nbytes )
     const void *buffer; // data to write.
     int nbytes;         // no of bytes to be written.
 {
-    cluster_list_t *wc = fd->current_cluster;
     size_t cluster_size = CLUSTER_SIZE ( fd->v );
     size_t nr_clusters = count_clusters ( fd->v, fd->size );
-    size_t alloc_bytes;
-    size_t total_written = 0;
+    size_t total_written, alloc_bytes;
 
     // will this write operation go past EOF? If so, we will have to
     // allocate additional clusters to accomodate the data to be written.
@@ -208,45 +175,13 @@ fat_write ( fd, buffer, nbytes )
         // fill.
         alloc_bytes = ( fd->offset + ( off_t ) nbytes ) - ( off_t )(
           nr_clusters * cluster_size );
-        nr_clusters = count_clusters ( fd->v, alloc_bytes );
 
         // allocate new clusters.
-        alloc_clusters ( fd, nr_clusters );
+        alloc_clusters ( fd, count_clusters ( fd->v, alloc_bytes ) );
     }
 
-    // the first chunk to be written will be either nbytes or the remaining
-    // size in the current cluster, whichever is smaller.
-    nwrite = ( nbytes <= ( cluster_size - fd->offset % cluster_size ) ) ?
-        nbytes : ( cluster_size - fd->offset % cluster_size );
-
-    // write out the data cluster by cluster.
-    while ( ( nbytes > 0 ) && ( wc != NULL ) )
-    {
-        // seek to the correct offset within the correct cluster, as 
-        // defined by the file offset.
-        safe_seek ( fd->v->dev_fd, CLUSTER_OFFSET ( fd->v, wc ) + (
-              fd->offset % cluster_size ), SEEK_SET );
-        safe_write ( fd->v->dev_fd, buffer, nwrite );
-
-        // update variables to track how much we still have to write.
-        nbytes -= nwrite;
-        buffer += nwrite;
-        total_written += nwrite;
-
-        // update the file offset.
-        fd->offset += nwrite;
-
-        // the next chunk to be written is either a full cluster, or
-        // nbytes, whichever is smaller.
-        nwrite = ( nbytes <= cluster_size ) ? nbytes : cluster_size;
-
-        // step to the next cluster.
-        wc = wc->next;
-    }
-
-    // Update the current cluster, so that it is consistent with the file
-    // offset.
-    update_current_cluster ( fd );
+    // transfer clusters from the buffer to the volume, using safe_write.
+    total_written = do_io ( fd, nbytes, buffer, &safe_write );
 
     return total_written;
 }
@@ -358,6 +293,61 @@ count_clusters ( v, nbytes )
     clusters += ( ( nbytes % CLUSTER_SIZE ( v ) ) != 0 ) ? 1 : 0;
 
     return clusters;
+}
+
+/**
+ *  This function carries out a read or write operation on a file on a
+ *  FAT file system. Take note: the fourth parameter is a pointer to an
+ *  IO function (read or write), which must have the same declaration as
+ *  safe_read or safe_write.
+ */
+    PRIVATE size_t
+do_io ( fd, nbytes, buffer, safe_io )
+    fat_file_t *fd;     // file handle.
+    size_t nbytes;      // number of bytes to transfer.
+    void *buffer;       // buffer to read from/write to.
+    size_t ( *safe_io ) ( int, void *, size_t );
+{
+    size_t cluster_size = CLUSTER_SIZE ( fd->v ), block;
+    size_t total_bytes = 0
+    cluster_list *this_cluster = fd->current_cluster;
+
+    // The first chunk of data to transfer will be either the remaining
+    // length in the current cluster, or nbytes, whichever is smaller.
+    block = ( nbytes <= ( cluster_size - fd->offset % cluster_size ) ) ?
+        nbytes : ( cluster_size - fd->offset % cluster_size );
+
+    // transfer data cluster by cluster. Note that if nbytes is less than
+    // one cluster, this may transfer just a single block.
+    while ( ( nbytes > 0 ) && ( this_cluster != NULL ) )
+    {
+        // seek to the correct offset within the correct cluster, as 
+        // defined by the file offset.
+        safe_seek ( fd->v->dev_fd, CLUSTER_OFFSET ( fd->v, this_cluster ) +
+          ( fd->offset % cluster_size ), SEEK_SET );
+        safe_io ( fd->v->dev_fd, buffer, block );
+
+        // update variables to track how much we still have to transfer.
+        nbytes -= block;
+        buffer += block;
+        total_bytes += block;
+
+        // update the file offset.
+        fd->offset += block;
+
+        // the next chunk to be transferred is either a full cluster, or
+        // nbytes, whichever is smaller.
+        block = ( nbytes <= cluster_size ) ? nbytes : cluster_size;
+
+        // step to the next cluster.
+        this_cluster = this_cluster->next;
+    }
+
+    // update the current cluster field in the file descriptor, if
+    // necessary.
+    update_current_cluster ( fd );
+
+    return total_bytes;
 }
 
 
