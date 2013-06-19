@@ -33,10 +33,34 @@ PRIVATE size_t count_clusters ( fat_volume_t *v, size_t nbytes );
 PRIVATE size_t do_io ( fat_file_t *fd, size_t nbytes, void *buffer,
   size_t ( *safe_io ) ( int, void *, size_t ) );
 
+// These functions maintain the list of currently open files. flist_add
+// adds a new file to the list, flist_lookup_file checks if a file is
+// already open, and flist_unlink is called when a file is closed, and
+// decrements the reference count, removing the file's entry from the
+// list when the count reaches 0.
+PRIVATE void flist_add ( fat_file_t *fd );
+PRIVATE bool flist_lookup_file ( fat_file_t **fd, fat_entry_t inode );
+PRIVATE void flist_unlink ( fat_file_t *fd );
+
 
 // global list of files that are currently open.
-struct file_table_entry *files_list;
+PRIVATE struct file_table_entry *files_list;
 
+// pointer to the global volume information. This will be set by a call to
+// fileio_init at mount time.
+PRIVATE fat_volume_t *volume_info;
+
+
+/**
+ *  This should be called once at mount time, with a pointer to the volume
+ *  info structure, which will be stored.
+ */
+    PUBLIC void
+fileio_init ( v )
+    fat_volume_t *v;    // pointer to volume info for the mounted fs.
+{
+    volume_info = v;
+}
 
 /**
  *  lookup a file's directory entry, and fill in a file struct with
@@ -48,34 +72,37 @@ struct file_table_entry *files_list;
     PUBLIC int
 fat_open ( path, fd )
     const char *path;   // path from mount point to the file.
-    fat_file_t *fd;     // pointer to the struct to fill in.
+    fat_file_t **fd;    // pointer to a file struct pointer to fill in.
 {
     fat_direntry_t dir;
     int retval;
     fat_entry_t FAT [ BUF_SIZE ];
     off_t fat_offset, fat_segment, next_segment;
     fat_entry_t this_cluster;
-    cluster_list_t **next_item = &( fd->clusters );
+    cluster_list_t **next_item;
 
     // obtain the directory entry corresponding to the file being opened.
-    if ( ( retval = fat_lookup_dir ( fd->v, path, &dir ) ) != 0 )
+    if ( ( retval = fat_lookup_dir ( volume_info, path, &dir ) ) != 0 )
         return retval;
 
-    // store the file size, and set the current offset to 0.
-    fd->size = ( size_t ) dir.size;
-    fd->offset = 0;
+    // check to see if the file is already open. If so, flist_lookup_file
+    // will store the pointer to *fd, and increment the references field,
+    // which completes the open() routine.
+    if ( flist_lookup_file ( fd, DIR_CLUSTER_START ( &dir ) ) == true )
+        return 0;
 
     // allocate space for the name string. Append a null byte to the end
     // to mark the end of the string, in case the filename takes up all 11
     // chars.
-    fd->name = safe_malloc ( sizeof ( char ) * DIR_NAME_LEN + 1 );
-    strncpy ( fd->name, dir.fname, DIR_NAME_LEN );
-    fd->name [ DIR_NAME_LEN ] = '\0';
+    ( *fd )->name = safe_malloc ( sizeof ( char ) * DIR_NAME_LEN + 1 );
+    strncpy ( ( *fd )->name, dir.fname, DIR_NAME_LEN );
+    ( *fd )->name [ DIR_NAME_LEN ] = '\0';
 
     // read the chain of cluster addresses from the file allocation table
     // on the disk, and store them in a linked list in memory, to minimise
     // seek operations on the disk later on. 
-    this_cluster = ( dir.cluster_msb << 16 ) | ( dir.cluster_lsb );
+    this_cluster = DIR_CLUSTER_START ( &dir );
+    next_item = &( ( *fd )->clusters );
 
     while ( IS_LAST_CLUSTER ( this_cluster ) == false )
     {
@@ -91,9 +118,12 @@ fat_open ( path, fd )
     }
 
     // store the file size, and set the current offset to 0.
-    fd->size = ( size_t ) dir.size;
-    fd->offset = 0;
-    fd->current_cluster = fd->clusters;
+    ( *fd )->size = ( size_t ) dir.size;
+    ( *fd )->offset = 0;
+    ( *fd )->current_cluster = ( *fd )->clusters;
+
+    // add the newly opened file to the open files list.
+    flist_add ( *fd );
 
     return 0;
 }
@@ -105,6 +135,9 @@ fat_open ( path, fd )
 fat_close ( fd )
     fat_file_t *fd;     // pointer to file struct of file being closed.
 {
+    flist_unlink ( fd );
+
+    // XXX: <oldcode>
     cluster_list_t *prev = NULL;
 
     // clear the size and offset fields.
@@ -130,6 +163,7 @@ fat_close ( fd )
     }
 
     safe_free ( &prev );
+    // XXX: </oldcode>
 
     return 0;
 }
@@ -161,8 +195,8 @@ fat_write ( fd, buffer, nbytes )
     const void *buffer; // data to write.
     int nbytes;         // no of bytes to be written.
 {
-    size_t cluster_size = CLUSTER_SIZE ( fd->v );
-    size_t nr_clusters = count_clusters ( fd->v, fd->size );
+    size_t cluster_size = CLUSTER_SIZE ( volume_info );
+    size_t nr_clusters = count_clusters ( volume_info, fd->size );
     size_t total_written, alloc_bytes;
 
     // will this write operation go past EOF? If so, we will have to
@@ -177,7 +211,7 @@ fat_write ( fd, buffer, nbytes )
           nr_clusters * cluster_size );
 
         // allocate new clusters.
-        alloc_clusters ( fd, count_clusters ( fd->v, alloc_bytes ) );
+        alloc_clusters ( fd, count_clusters ( volume_info, alloc_bytes ) );
     }
 
     // transfer clusters from the buffer to the volume, using safe_write.
@@ -265,7 +299,7 @@ update_current_cluster ( fd )
     // step through the first n clusters in the cluster list, where n is
     // the number of clusters before the file offset.
     for ( i = 0, cp = fd->clusters;
-      ( i != fd->offset / CLUSTER_SIZE ( fd->v ) ) && ( cp != NULL );
+      ( i != fd->offset / CLUSTER_SIZE ( volume_info ) ) && ( cp != NULL );
       i += 1, cp = cp->next )
     {
         ;
@@ -308,7 +342,7 @@ do_io ( fd, nbytes, buffer, safe_io )
     void *buffer;       // buffer to read from/write to.
     size_t ( *safe_io ) ( int, void *, size_t );
 {
-    size_t cluster_size = CLUSTER_SIZE ( fd->v ), block;
+    size_t cluster_size = CLUSTER_SIZE ( volume_info ), block;
     size_t total_bytes = 0
     cluster_list *this_cluster = fd->current_cluster;
 
@@ -323,9 +357,10 @@ do_io ( fd, nbytes, buffer, safe_io )
     {
         // seek to the correct offset within the correct cluster, as 
         // defined by the file offset.
-        safe_seek ( fd->v->dev_fd, CLUSTER_OFFSET ( fd->v, this_cluster ) +
+        safe_seek ( volume_info->dev_fd, 
+          CLUSTER_OFFSET ( fd->v, this_cluster ) + 
           ( fd->offset % cluster_size ), SEEK_SET );
-        safe_io ( fd->v->dev_fd, buffer, block );
+        safe_io ( volume_info->dev_fd, buffer, block );
 
         // update variables to track how much we still have to transfer.
         nbytes -= block;
@@ -348,6 +383,97 @@ do_io ( fd, nbytes, buffer, safe_io )
     update_current_cluster ( fd );
 
     return total_bytes;
+}
+
+/**
+ *  Add a new file to the open files list, setting the ref count to 1.
+ *  This should ONLY be called after checking that the file is not already
+ *  open, using flist_lookup_file.
+ */
+    PRIVATE void
+flist_add ( fd )
+    fat_file_t *fd;     // file descriptor to add.
+{
+    struct file_table_entry *ft = safe_malloc ( sizeof ( 
+          struct file_table_entry ) );
+
+    // fill in the new open file struct. New entries are added to the
+    // head of the list, as this saves having to traverse the list to
+    // find the tail.
+    ft->file = fd;
+    ft->refcount = 1;
+    ft->next = files_list;
+
+    files_list = ft;
+}
+
+/**
+ *  check to see if a given file is already open. For the purposes of this
+ *  procedure, files are uniquely identified using the index of their first
+ *  cluster. This index is referred to as an "i-node" because Emphatic
+ *  returns that value in the reply to a stat call.
+ *
+ *  Return value is true if an open file entry was found, and false if
+ *  not.
+ */
+    PRIVATE bool
+flist_lookup_file ( fd, inode )
+    fat_file_t **fd;    // If an entry is found, *fd will be filled in.
+    fat_entry_t inode;  // unique identifier, as described above.
+{
+    struct file_table_entry *ft;
+
+    // step through the list of open files, comparing inode values.
+    for ( ft = files_list; ( ft != NULL ) && ( ft->file->inode != inode );
+      ft = ft->next )
+    {
+        ;
+    }
+
+    // if ft points to a list entry, we have found a match.
+    if ( ft != NULL )
+    {
+        // match found. Store the file handle at *fd, and increment the
+        // reference count.
+        *fd = ft->file;
+        ft->refcount += 1;
+        return true;
+    }
+
+    // if we reach this point, no open file was found.
+    return false;
+}
+
+/**
+ *  Remove exactly one reference to a file. If there are other references,
+ *  this will only decrement the refcount, if this is the last reference,
+ *  the file will be removed from the open files list.
+ */
+    PRIVATE void
+flist_unlink ( fd )
+    fat_file_t *fd;     // file handle to un reference.
+{
+    struct file_table_entry **ft, *temp;
+
+    // step through the open files list until we find an item with the
+    // same file handle.
+    for ( ft = &files_list; ( ( *ft )->file != fd ) && ( *ft != NULL );
+      ft = &( ( *ft )->next ) )
+    {
+        ;
+    }
+
+    // if there are other references remaining, don't remove the file
+    // from the open files list.
+    if ( ( ( *ft )->refcount -= 1 ) != 0 )
+        return;
+
+    // no references remain, so unlink this item from the files list.
+    temp = *ft;
+    *ft = ( *ft )->next;
+    safe_free ( &temp );
+
+    // free the file structure.
 }
 
 

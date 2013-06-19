@@ -269,6 +269,11 @@ typedef struct
 }
 __attribute__ (( packed )) fat_direntry_t;
 
+// This macro provides the cluster index of the first cluster in the
+// chain.
+#define DIR_CLUSTER_START( d )      ( ( ( d )->cluster_msb << 16 ) | \
+  ( ( d )->cluster_lsb ) )
+
 
 /**
  *  This structure contains information about a mounted mfatic volume.
