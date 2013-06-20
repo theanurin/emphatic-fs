@@ -137,34 +137,6 @@ fat_close ( fd )
 {
     flist_unlink ( fd );
 
-    // XXX: <oldcode>
-    cluster_list_t *prev = NULL;
-
-    // clear the size and offset fields.
-    fd->size = 0;
-    fd->offset = 0;
-
-    // release the buffer allocated for the filename.
-    safe_free ( &( fd->name ) );
-
-    // step through the cluster list, releasing the items as we go.
-    for ( cluster_list_t *cp = fd->clusters; cp != NULL; cp = cp->next )
-    {
-        // We can't just free cp, because then the loop update statement
-        // would be accessing memory that has been freed, so we will keep
-        // a variable prev which points to the item behind the current
-        // item. This *can* safely be freed, except on the first iteration,
-        // when there is no previous item; so we don't free anything.
-        if ( prev != NULL )
-            safe_free ( &prev );
-
-        // set up prev for the next iteration.
-        prev = cp;
-    }
-
-    safe_free ( &prev );
-    // XXX: </oldcode>
-
     return 0;
 }
 
@@ -454,6 +426,7 @@ flist_unlink ( fd )
     fat_file_t *fd;     // file handle to un reference.
 {
     struct file_table_entry **ft, *temp;
+    cluster_list_t *prev = NULL, *cp;
 
     // step through the open files list until we find an item with the
     // same file handle.
@@ -473,7 +446,26 @@ flist_unlink ( fd )
     *ft = ( *ft )->next;
     safe_free ( &temp );
 
-    // free the file structure.
+    // free the file structure. We need to first free the name buffer,
+    // and linked list of clusters.
+    safe_free ( &( fd->name ) );
+
+    for ( cp = fd->clusters; cp != NULL; cp = cp->next )
+    {
+        // we cannot free the current list item, because that memory is
+        // referenced by the loop update statement. Instead we free the
+        // list item encountered in the previous iteration.
+        if ( prev != NULL )
+            safe_free ( &prev );
+
+        // current list item becomes the previous item for the next loop
+        // iteration.
+        prev = cp;
+    }
+
+    // free the last item from the list, and the file handle.
+    safe_free ( &prev );
+    safe_free ( &fd );
 }
 
 

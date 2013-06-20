@@ -17,6 +17,10 @@
 #include "fat.h"
 
 
+// called at mount time, with a pointer to the volume info struct for the
+// file system being mounted.
+extern void fileio_init ( fat_volume_t *v );
+
 // locate a file on a device, and fill in the file struct pointed to by the
 // second param. The file struct must have the volume and mode fields filled
 // in before the call to this procedure.
