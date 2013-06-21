@@ -27,6 +27,14 @@ struct free_region
 PRIVATE void build_free_list (const fat_entry_t *buffer, size_t length,
   struct free_region **list, bool *prev_alloced);
 
+// functions for reading salient items from the free space map.
+PRIVATE fat_cluster_t get_nearest_free (fat_cluster_t near);
+PRIVATE struct free_region * get_largest_region (void);
+
+// merge a newly freed cluster into two neighbouring free regions.
+PRIVATE void merge_free_regions (struct free_region *left, 
+  struct free_region *right, fat_cluster_t released);
+
 
 // global list of free regions.
 PRIVATE struct free_region *free_map;
@@ -73,6 +81,56 @@ init_clusters_map (v)
 
     // release the memory allocated to our sector buffer.
     safe_free (&entry_buffer);
+}
+
+/**
+ *  Allocate a new cluster to the end of a file. Emphatic's policy is to
+ *  allocate the nearest free cluster to the end of the file.
+ *
+ *  This procedure will mark the chosen cluster as allocated, store the
+ *  end of chain sentinel in it's FAT cell, and store the cluster index
+ *  of the chosen cluster in the FAT cell of the previous cluster in the
+ *  chain. The upshot of all this is that the caller does not have to
+ *  do any manipulation of the FAT.
+ */
+    PUBLIC fat_cluster_t
+new_cluster (near)
+    fat_cluster_t near;         // current end of chain.
+{
+    fat_cluster_t chosen = get_nearest_free (near);
+
+    // store the new allocation in the FAT.
+    put_fat_entry (chosen, END_CLUSTER_MARK);
+    put_fat_entry (near, chosen);
+
+    return chosen;
+}
+
+/**
+ *  This procedure should be called whenever a cluster is released back
+ *  to the pool of free clusters (eg. when a file is permanently deleted).
+ *  It will record the cluster as free in the FAT, and will also update
+ *  the free space map to reflect the new state.
+ */
+    PUBLIC void
+release_cluster (c)
+    fat_cluster_t c;            // cluster offset, from start of data.
+{
+    struct free_region **left = NULL, **right;
+
+    // The cluster being released must sit somewhere between two free
+    // regions. Step through the list of free regions until we find the
+    // bordering regions.
+    for (right = &free_map; (*right != NULL) && ((*right)->start < c); 
+      right = &((*right)->next))
+    {
+        left = right;
+    }
+
+    merge_free_regions (left, right, c);
+
+    // record the cluster as being available.
+    put_fat_entry (c, 0x00000000);
 }
 
 /**
@@ -123,6 +181,50 @@ build_free_list (buffer, length, list, prev_alloced)
             // allocated to a file.
             *prev_alloced = true;
         }
+    }
+}
+
+/**
+ *  Given an index for a newly released cluster, and pointers to the free
+ *  region structs for the free regions directly to the left and/or right
+ *  of that cluster, merge the freed cluster into the free space map.
+ */
+    PRIVATE void
+merge_free_regions (left, right, released)
+    struct free_region **left;      // left bordering free region.
+    struct free_region **right;     // and the right.
+    fat_cluster_t released;         // freed cluster.
+{
+    // if there is no left bordering free region, the freed cluster is 
+    // before the first free region.
+    if ((*left == NULL) && (*right != NULL))
+    {
+        *right = merge_region (*right, released);
+    }
+
+    // if the released cluster sits between two free regions...
+    if ((*left != NULL) && (*right != NULL))
+    {
+        // Check if the freed cluster is immediately before the start of
+        // the right free region.
+        if (released == ((*right)->start - 1))
+        {
+            // yes. All we have to do, then, is change the start of the
+            // right free region to the freed cluster.
+            (*right)->start = released;
+        }
+        else
+        {
+            // merge with the left free region.
+            *left = merge_region (*left, released);
+        }
+    }
+
+    // if there is no free region on the right, then the freed cluster is
+    // after the very last free region.
+    if ((*left != NULL) && (*right == NULL))
+    {
+        *left = merge_region (*left, released);
     }
 }
 

@@ -115,6 +115,7 @@ put_fat_entry (entry, val)
 {
     unsigned int offset, index;
     size_t sector_size = SECTOR_SIZE (volume_info);
+    fat_entry_t old_val;
 
     // calculate sector index, and offset within that sector.
     offset = entry * FAT_ENTSIZE;
@@ -126,6 +127,14 @@ put_fat_entry (entry, val)
     safe_seek (volume_info->dev_fd, 
       (FAT_START (volume_info) + index) * sector_size + offset,
       SEEK_SET);
+
+    // FAT32 entries are only 28 bits long, and the most significant 4
+    // bits are reserved, and must not be overwritten on writes. Instead,
+    // we have to read the existing contents, and OR them into the new
+    // value.
+    safe_read (volume_info->dev_fd, old_val, sizeof (fat_entry_t));
+    safe_seek (volume_info->dev_fd, -1 * sizeof (fat_entry_t), SEEK_CUR);
+    val = (old_val & 0xF0000000) | (val & 0x0FFFFFFF);
 
     // write in the new value.
     safe_write (volume_info->dev_fd, &val, sizeof (fat_entry_t));
