@@ -15,7 +15,7 @@ PROG = mfatic-fuse
 
 all:		Depend $(PROG) tags
 
-$(PROG):	$(SRC)
+$(PROG):	$(OBJS)
 	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
 
 clean:

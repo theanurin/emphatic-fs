@@ -31,9 +31,27 @@ PRIVATE void build_free_list (const fat_entry_t *buffer, size_t length,
 PRIVATE fat_cluster_t get_nearest_free (fat_cluster_t near);
 PRIVATE struct free_region * get_largest_region (void);
 
+// higher order function for traversing the free space map to find a
+// desired region.
+PRIVATE struct free_region ** traverse_map (
+  struct free_region ** (*callback) (struct free_region **current,
+      struct free_region **candidate, fat_cluster_t cmp), 
+  fat_cluster_t cluster);
+
+// callbacks given to traverse_map by get_nearest and get_largest.
+PRIVATE struct free_region * nearest (struct free_region *current,
+  struct free_region *candidate, fat_cluster_t cmp);
+PRIVATE struct free_region * largest (struct free_region *current,
+  struct free_region *candidate, fat_cluster_t cmp);
+
+PRIVATE unsigned int distance (struct free_region *region, 
+  fat_cluster_t cluster);
+
 // merge a newly freed cluster into two neighbouring free regions.
-PRIVATE void merge_free_regions (struct free_region *left, 
-  struct free_region *right, fat_cluster_t released);
+PRIVATE void merge_free_regions (struct free_region **left, 
+  struct free_region **right, fat_cluster_t released);
+PRIVATE struct free_region * merge_region (struct free_region *reg,
+  fat_cluster_t released);
 
 
 // global list of free regions.
@@ -116,7 +134,11 @@ new_cluster (near)
 release_cluster (c)
     fat_cluster_t c;            // cluster offset, from start of data.
 {
-    struct free_region **left = NULL, **right;
+    struct free_region **left, **right, *temp = NULL;
+
+    // to start off, *left must equal NULL, or merge_free_regions will
+    // die.
+    left = &temp;
 
     // The cluster being released must sit somewhere between two free
     // regions. Step through the list of free regions until we find the
@@ -185,6 +207,154 @@ build_free_list (buffer, length, list, prev_alloced)
 }
 
 /**
+ *  locate the nearest free cluster to a given cluster, and modify the
+ *  free space map to indicate that it is used.
+ *
+ *  Return value is the cluster which was selected.
+ */
+    PRIVATE fat_cluster_t
+get_nearest_free (near)
+    fat_cluster_t near;         // find the closest cluster to this one.
+{
+    // look up the nearest free region.
+    struct free_region **reg = traverse_map (&nearest, near), *temp;
+    fat_cluster_t alloc;
+
+    // The cluster to allocate will be on either end of the free region,
+    // depending on whether near is on it's left or right.
+    if (near < (*reg)->start)
+    {
+        // allocate the first cluster in the region.
+        alloc = (*reg)->start;
+        (*reg)->start += 1;
+    }
+    else
+    {
+        // allocate the last cluster in the free region.
+        alloc = (*reg)->start + (*reg)->length - 1;
+    }
+
+    // decrement the length of the free region. If we have just allocated
+    // the last cluster, we will have to remove it from the free map.
+    (*reg)->length -= 1;
+
+    if ((*reg)->length == 0)
+    {
+        // unlink reg from the list.
+        temp = *reg;
+        *reg = (*reg)->next;
+        safe_free (&temp);
+    }
+
+    return alloc;
+}
+
+/**
+ *  Find the largest free region on the volume.
+ */
+    PRIVATE struct free_region *
+get_largest_region (void)
+{
+    return *(traverse_map (&largest, 0));
+}
+
+/**
+ *  Traverse the free space map and return a desireable region (ie. the
+ *  largest region, or the closest to an existing allocated cluster).
+ *
+ *  This function takes two parameters, a pointer to a function which will
+ *  be invoked on each item in the free space list, and a cluster index,
+ *  for finding the closest free region (this may be 0 otherwise).
+ */
+    PRIVATE struct free_list **
+traverse_map (callback, cluster)
+    struct free_region ** (*callback) (struct free_region **current,
+      struct free_region **candidate, fat_cluster_t cmp);
+    fat_cluster_t cluster;      // cluster to locate closest free region.
+{
+    struct free_region **current = &free_map, **candidate;
+
+    // step through all the items in the free space map.
+    for (candidate = &free_map; *candidate != NULL; 
+      candidate = &((*candidate)->next))
+    {
+        current = callback (current, candidate, cluster);
+    }
+
+    return current;
+}
+
+/**
+ *  Callback function to be given to traverse_map to find the nearest
+ *  free region to a given cluster.
+ *
+ *  If candidate is closer to cmp than current, the return value will be
+ *  candidate, otherwise this function returns current.
+ */
+    PRIVATE struct free_region **
+nearest (current, candidate, cmp)
+    struct free_region **current;   // current nearest region.
+    struct free_region **candidate; // possible closer region.
+    fat_cluster_t cmp;              // cluster to match to.
+{
+    if (distance (*candidate, cmp) < distance (*current, cmp))
+    {
+        return candidate;
+    }
+    else
+    {
+        return current;
+    }
+}
+
+/**
+ *  Callback function to be given to traverse_map to find the largest
+ *  free region by linear search of the in-memory free space map.
+ *
+ *  This function compares the length of current and candidate, and
+ *  returns the region with the largest length.
+ */
+    PRIVATE struct free_region **
+largest (current, candidate, cmp)
+    struct free_region **current;   // current max.
+    struct free_region **candidate; // next region being compared.
+    fat_cluster_t cmp;              // unused.
+{
+    if ((*candidate)->length > (*current)->length)
+    {
+        return candidate;
+    }
+    else
+    {
+        return current;
+    }
+}
+
+/**
+ *  calculate the closest distance from a free region to a given cluster.
+ */
+    PRIVATE unsigned int
+distance (region, cluster)
+    struct free_region *region;     // free region concerned.
+    fat_cluster_t cluster;          // cluster to find distance to.
+{
+    // the cluster could be on either the left or the right of the free
+    // region.
+    if (cluster < region->start)
+    {
+        // on the left. Return distance from the cluster to the start
+        // of the free region.
+        return region->start - cluster;
+    }
+    else
+    {
+        // on the right. Return distance from the end of the free region
+        // to the cluster.
+        return cluster - (region->start + region->length);
+    }
+}
+
+/**
  *  Given an index for a newly released cluster, and pointers to the free
  *  region structs for the free regions directly to the left and/or right
  *  of that cluster, merge the freed cluster into the free space map.
@@ -226,6 +396,62 @@ merge_free_regions (left, right, released)
     {
         *left = merge_region (*left, released);
     }
+}
+
+/**
+ *  Merge a free region with a nearby newly released cluster. If possible,
+ *  this function will simply change the free region descriptor, provided
+ *  that the freed cluster is adjacent to the free region; otherwise, a
+ *  new free region of size 1 cluster is created and linked either before
+ *  or after the existing free region.
+ *
+ *  Return value is a pointer to the new free region, which may be a list
+ *  with two items. The tail of this list will be correctly set to point
+ *  to any items on the end of the previous list.
+ */
+    PRIVATE struct free_region *
+merge_region (reg, released)
+    struct free_region *reg;        // pointer to nearest free region.
+    fat_cluster_t released;         // cluster index that has been freed.
+{
+    struct free_region *new_reg = reg;
+
+    // first, check if the released cluster forms a new free region.
+    if ((released < (reg->start - 1)) || (released > 
+          (reg->start + reg->length)))
+    {
+        // create a new free region descriptor.
+        new_reg = safe_malloc (sizeof (struct free_region));
+        new_reg->start = released;
+        new_reg->length = 1;
+
+        // check if we need to link the new region before or after reg.
+        if (released > (reg->start + reg->length))
+        {
+            // link new_reg after reg.
+            new_reg->next = reg->next;
+            reg->next = new_reg;
+        }
+        else
+        {
+            // link before.
+            new_reg->next = reg;
+        }
+    }
+
+    // is the released cluster adjacent to the start of the free region?
+    // If so, move the start of reg to include the freed cluster.
+    if (released == (reg->start - 1))
+        reg->start -= 1;
+
+    // and likewise for a freed cluster adjacent to the end of the free
+    // region.
+    if (released == (reg->start + reg->length))
+        reg->length += 1;
+
+    // regardless of whether or not a new region was created, new region
+    // will always point to the updated state of the free space map.
+    return new_reg;
 }
 
 
