@@ -18,6 +18,10 @@
 // initialise the map of the free space on a given volume.
 extern void init_clusters_map (fat_volume_t *v);
 
+// provide general usage statistics.
+extern int used_clusters (void);
+extern int free_clusters (void);
+
 // Find the unallocated cluster closest to near, and mark it as allocated.
 // return value is the cluster index of the cluster that was allocated.
 // This function will also modify the FAT, such that the newly allocated

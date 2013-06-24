@@ -57,6 +57,10 @@ PRIVATE struct free_region * merge_region (struct free_region *reg,
 // global list of free regions.
 PRIVATE struct free_region *free_map;
 
+// variables used to track statistics.
+PRIVATE int nr_allocated_clusters;
+PRIVATE int nr_available_clusters;
+
 
 /**
  *  Scan through the file allocation table on the device being mounted,
@@ -70,6 +74,9 @@ init_clusters_map (v)
     struct free_region *current = safe_malloc (sizeof (struct free_region));
     bool prev_alloced = true;
     size_t nr_entries = SECTOR_SIZE (v) / sizeof (fat_entry_t);
+
+    nr_allocated_clusters = 0;
+    nr_available_clusters = 0;
 
     // FAT is stored in an integer number of sectors, so we will read it in
     // blocks of one sector.
@@ -102,6 +109,24 @@ init_clusters_map (v)
 }
 
 /**
+ *  Return the number of clusters which are allocated to files.
+ */
+    PUBLIC int
+used_clusters (void)
+{
+    return nr_allocated_clusters;
+}
+
+/**
+ *  Return the number of clusters which are available for allocation.
+ */
+    PUBLIC int
+free_clusters (void)
+{
+    return nr_available_clusters;
+}
+
+/**
  *  Allocate a new cluster to the end of a file. Emphatic's policy is to
  *  allocate the nearest free cluster to the end of the file.
  *
@@ -120,6 +145,10 @@ new_cluster (near)
     // store the new allocation in the FAT.
     put_fat_entry (chosen, END_CLUSTER_MARK);
     put_fat_entry (near, chosen);
+
+    // update the cluster allocation stats.
+    nr_allocated_clusters += 1;
+    nr_available_clusters -= 1;
 
     return chosen;
 }
@@ -153,6 +182,10 @@ release_cluster (c)
 
     // record the cluster as being available.
     put_fat_entry (c, 0x00000000);
+
+    // update the allocation stats.
+    nr_allocated_clusters -= 1;
+    nr_available_clusters += 1;
 }
 
 /**
@@ -196,12 +229,18 @@ build_free_list (buffer, length, list, prev_alloced)
                 // the length of the current region.
                 (*list)->length += 1;
             }
+
+            // record stats.
+            nr_available_clusters += 1;
         }
         else
         {
             // record for the next iteration that the last FAT entry was
             // allocated to a file.
             *prev_alloced = true;
+
+            // record stats.
+            nr_allocated_clusters += 1;
         }
     }
 }
