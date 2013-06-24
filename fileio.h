@@ -19,20 +19,20 @@
 
 // called at mount time, with a pointer to the volume info struct for the
 // file system being mounted.
-extern void fileio_init ( fat_volume_t *v );
+extern void fileio_init (const fat_volume_t *v);
 
 // locate a file on a device, and fill in the file struct pointed to by the
 // second param. The file struct must have the volume and mode fields filled
 // in before the call to this procedure.
-extern int fat_open ( const char *path, fat_file_t *fd );
-extern int fat_close ( fat_file_t *fd );
+extern int fat_open (const char *path, fat_file_t *fd);
+extern int fat_close (fat_file_t *fd);
 
 // read and write from a file.
-extern size_t fat_read ( fat_file_t *fd, void *buf, size_t nbytes );
-extern size_t fat_write ( fat_file_t *fd, const void *buf, size_t nbytes );
+extern size_t fat_read (fat_file_t *fd, void *buf, size_t nbytes);
+extern size_t fat_write (fat_file_t *fd, const void *buf, size_t nbytes);
 
 // change the current position in a file.
-extern off_t fat_seek ( fat_file_t *fd, off_t offset, int whence );
+extern off_t fat_seek (fat_file_t *fd, off_t offset, int whence);
 
 
 #endif // MFATIC_FILEIO_H

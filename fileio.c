@@ -57,7 +57,7 @@ PRIVATE fat_volume_t *volume_info;
  */
     PUBLIC void
 fileio_init ( v )
-    fat_volume_t *v;    // pointer to volume info for the mounted fs.
+    const fat_volume_t *v;  // pointer to volume info for the mounted fs.
 {
     volume_info = v;
 }

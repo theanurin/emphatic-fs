@@ -13,7 +13,7 @@
 
 // this should be called once, at mount time, to initialise a pointer
 // to the volume structure.
-extern void table_init (fat_volume_t *volume);
+extern void table_init (const fat_volume_t *volume);
 
 // These routines fetch or write to given cells in the file allocation
 // table. Write through LRU caching is implemented internally to avoid large

@@ -69,7 +69,7 @@ PRIVATE int nr_available_clusters;
  */
     PUBLIC void
 init_clusters_map (v)
-    fat_volume_t *v;    // volume struct for the filesystem being mounted.
+    const fat_volume_t *v;  // volume struct for the mounted filesystem.
 {
     struct free_region *current = safe_malloc (sizeof (struct free_region));
     bool prev_alloced = true;

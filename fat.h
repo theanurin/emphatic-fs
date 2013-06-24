@@ -271,8 +271,11 @@ __attribute__ (( packed )) fat_direntry_t;
 
 // This macro provides the cluster index of the first cluster in the
 // chain.
-#define DIR_CLUSTER_START( d )      ( ( ( d )->cluster_msb << 16 ) | \
-  ( ( d )->cluster_lsb ) )
+#define DIR_CLUSTER_START( d )      (((d)->cluster_msb << 16) | \
+  ((d)->cluster_lsb))
+#define PUT_DIRENTRY_CLUSTER(dir, cluster)              \
+    ((dir)->cluster_msb = ((cluster) >> 16));           \
+    ((dir)->cluster_lsb = ((cluster) & 0x0000FFFF);
 
 
 /**
@@ -313,8 +316,8 @@ typedef struct
     // pointer to the volume struct of the host file system.
     fat_volume_t    *v;
 
-    // access mode set by open.
-    int             mode;
+    // file attribute bits.
+    int             attributes;
 
     // file name. Points to a malloc()ed string.
     char            *name;

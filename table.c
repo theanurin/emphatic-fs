@@ -66,7 +66,7 @@ PRIVATE struct fat_cluster_cache cache;
  */
     PUBLIC void
 table_init (v)
-    fat_volume_t *v;    // pointer to volume information.
+    const fat_volume_t *v;      // pointer to volume information.
 {
     volum_info = v;
 

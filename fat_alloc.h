@@ -16,7 +16,7 @@
 
 
 // initialise the map of the free space on a given volume.
-extern void init_clusters_map (fat_volume_t *v);
+extern void init_clusters_map (const fat_volume_t *v);
 
 // provide general usage statistics.
 extern int used_clusters (void);

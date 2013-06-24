@@ -16,9 +16,11 @@
 #include "fat.h"
 
 
+// tell directory.c where the volume info is.
+extern void directory_init (const fat_volume_t *volinfo);
+
 // look up the directory entry for a particular file.
-extern int fat_lookup_dir ( fat_volume_t *v, const char *path, 
-  fat_direntry_t *d );
+extern int fat_lookup_dir (const char *path, fat_direntry_t *d);
 
 
 #endif // MFATIC_DIRECTORY_H
