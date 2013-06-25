@@ -43,11 +43,11 @@ PRIVATE int mfatic_mkdir (const char *name, mode_t mode);
 PRIVATE int mfatic_unlink (const char *name);
 PRIVATE int mfatic_rmdir (const char *name);
 
-// read the contents of a directory.
-PRIVATE int mfatic_opendir (const char *path, struct fuse_file_info *fd);
+// read the contents of a directory. Opening and closing a directory is
+// done using mfatic_open and mfatic_release, because a directory is,
+// after all, just a file.
 PRIVATE int mfatic_readdir (const char *path, void *buf, fuse_fill_dir_t
   *filler, off_t offset, struct fuse_file_info *fd);
-PRIVATE int mfatic_releasedir (const char *path, struct fuse_file_info *fd);
 
 // rename a file
 PRIVATE int mfatic_rename (const char *old, const char *new);
@@ -57,11 +57,6 @@ PRIVATE int mfatic_truncate (const char *path, off_t length);
 
 // change the access and/or modification times of a file.
 PRIVATE int mfatic_utime (const char *path, const struct utimbuf *time);
-
-// sync a file, and flush cached data on a close.
-PRIVATE int mfatic_fsync (const char *path, int datasync,
-  struct fuse_file_info *fd);
-PRIVATE int mfatic_flush (const char *path, struct fuse_file_info *fd);
 
 
 // Pointer to a struct containing information about the mounted file system
@@ -75,9 +70,9 @@ PRIVATE struct fuse_operations mfatic_ops =
 {
     .getattr    = mfatic_getattr,
     .access     = mfatic_access,
-    .opendir    = mfatic_opendir,
+    .opendir    = mfatic_open,
     .readdir    = mfatic_readdir,
-    .releasedir = mfatic_releasedir,
+    .releasedir = mfatic_release,
     .mknod      = mfatic_mknod,
     .mkdir      = mfatic_mkdir,
     .unlink     = mfatic_unlink,
@@ -90,8 +85,6 @@ PRIVATE struct fuse_operations mfatic_ops =
     .write      = mfatic_write,
     .release    = mfatic_release,
     .statfs     = mfatic_statfs,
-    .fsync      = mfatic_fsync,
-    .flush      = mfatic_flush
 };
 
 
@@ -283,6 +276,43 @@ mfatic_statfs (name, st)
     // At present, we do not support long file names; only the old 8.3
     // (8 chars, plus 3 char extension) names.
     st->f_namemax = DIR_NAME_LEN;
+
+    return 0;
+}
+
+/**
+ *  Read information from a directory about the files and/or subdirectories
+ *  contained within it.
+ */
+    PRIVATE int
+mfatic_readdir (path, buffer, filler, offset, fd)
+    const char *path;               // directory name. Unused.
+    void *buffer;                   // buffer to write info to.
+    fuse_fill_dir_t *filler;        // function to fill the buffer with.
+    off_t offset;                   // index of first direntry to read.
+    struct fuse_file_info *fd;      // directory file handle.
+{
+    fat_direntry_t entry;
+    struct stat attrs;
+
+    // move the read offset to the start of the first entry to read.
+    if (fat_seek (fd, offset * sizeof (fat_direntry_t), SEEK_SET) != 
+      offset * sizeof (fat_direntry_t))
+    {
+        return EOF;
+    }
+
+    // iteratively read entries until the filler function indicates that
+    // we have filled the buffer.
+    do
+    {
+        // read the next entry.
+        fat_read (fd, &entry, sizeof (fat_direntry_t));
+
+        // unpack file attribute information from the directory entry.
+        unpack_attributes (&entry, &attrs);
+    }
+    while ((*filler) (buffer, entry->fname, &attrs, offset += 1) != 1);
 
     return 0;
 }
