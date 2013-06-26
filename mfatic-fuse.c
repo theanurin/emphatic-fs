@@ -203,52 +203,13 @@ mfatic_getattr (path, stat)
 {
     fat_direntry_t file_info;
     int retval;
-    blkcnt_t nr_blocks;
-    mode_t file_mode;
 
     // fetch the directory entry for the file.
     if ((retval = fat_lookup_dir (path, &file_info)) != 0)
         return retval;
 
-    // construct UNIX style mode information. The FAT file system only
-    // stores a limitted number of attributes, mainly a directory bit and
-    // a read-only bit.
-    // The file is either a regular file or a directory.
-    if ((file_info->attributes & ATTR_DIRECTORY) != 0)
-    {
-        // directory. Give owner RWX permission, group and others do not
-        // have write permission.
-        file_mode |= (S_IFDIR | 0755);
-    }
-    else
-    {
-        // regular file.
-        file_mode |= (S_IFREG | 0755);
-    }
-
-    // if the file is read only, unset the write bit.
-    if ((file_info->attributes & ATTR_READONLY) != 0)
-    {
-        file_mode &= ~(S_IWUSER | S_IWGRP | S_IWOTH);
-    }
-
-    // calculate the number of clusters that are allocated to the file.
-    nr_blocks = file_info->size / CLUSTER_SIZE (volume_info);
-
-    if ((file_info->size % CLUSTER_SIZE (volume_info)) != 0)
-        nr_blocks += 1;
-
-    // fill in the stat buffer.
-    st->st_ino = DIR_CLUSTER_START (file_info);
-    st->st_mode = file_mode;
-    st->st_size = file_info->size;
-    st->st_blksize = CLUSTER_SIZE (volume_info);
-    st->st_blocks = nr_blocks;
-
-    // translate the time stamps from DOS time to UNIX time.
-    st->st_atime = unix_time (file_info->access_date, 0);
-    st->st_mtime = unix_time (file_info->write_date, 
-      file_info->write_time);
+    // extract the file's metadata from the directory entry.
+    unpack_attributes (&file_info, st);
 
     return 0;
 }
