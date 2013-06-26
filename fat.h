@@ -33,9 +33,9 @@ typedef uint32_t fat_entry_t;
 // These macros can be used to test if a given entry in the file allocation
 // table corresponds to the last cluster in a file, or a cluster marked as
 // bad.
-#define IS_LAST_CLUSTER( entry ) ( ( ( entry ) & 0x0FFFFFFF ) >= 0x0FFFFFF8 )
-#define IS_BAD_CLUSTER( entry )  ( ( ( entry ) & 0x0FFFFFFF ) == 0x0FFFFFF7 )
-#define IS_FREE_CLUSTER( entry ) ( ( ( entry ) & 0x0FFFFFFF ) == 0x00000000 )
+#define IS_LAST_CLUSTER(entry)      (((entry) & 0x0FFFFFFF) >= 0x0FFFFFF8)
+#define IS_BAD_CLUSTER(entry)       (((entry) & 0x0FFFFFFF) == 0x0FFFFFF7)
+#define IS_FREE_CLUSTER(entry)      (((entry) & 0x0FFFFFFF) == 0x00000000)
 
 // sentinels for the last cluster or a bad cluster.
 #define END_CLUSTER_MARK    0x0FFFFFF8
@@ -64,9 +64,19 @@ typedef uint32_t fat_entry_t;
 //  | | | | | | | | | | | | | | | | |
 //  \  5 bits /\  6 bits  /\ 5 bits /
 //      hour      minute     sec*2
-#define TIME_HOUR( t )      ( ( ( t ) & 0xF800 ) >> 11 )
-#define TIME_MINUTE( t )    ( ( ( t ) & 0x07E0 ) >> 5 )
-#define TIME_SECOND( t )    ( ( ( t ) & 0x001F ) << 1 )
+#define TIME_HOUR(t)        (((t) & 0xF800) >> 11)
+#define TIME_MINUTE(t)      (((t) & 0x07E0) >> 5)
+#define TIME_SECOND(t)      (((t) & 0x001F) << 1)
+
+// store a new value in a time field.
+#define SET_HOUR(t, h)      \
+    ((t) |= ((t) & ~0xF800) | (((h) << 11) & 0xF800))
+
+#define SET_MINUTE(t, m)    \
+    ((t) |= ((t) & ~0x07E0) | (((m) << 5) & 0x07E0))
+
+#define SET_SECOND(t, s)    \
+    ((t) |= ((t) & ~0x001F) | (((s) >> 1) & 0x001F))
 
 // Date encoding: Note that dates are relative to the DOS epoch of 
 // 00:00:00 UTC 1 Jan 1980.
@@ -76,35 +86,44 @@ typedef uint32_t fat_entry_t;
 //  | | | | | | | | | | | | | | | | |
 //  \   7 bits    /\4 bits/\ 5 bits /
 //    year + 1980    month    day
-#define DATE_YEAR( d )      ( ( ( ( d ) & 0xFE00 ) >> 9 ) + 1980 )
-#define DATE_MONTH( d )     ( ( ( d ) & 0x01E0 ) >> 5 )
-#define DATE_DAY( d )       ( ( d ) & 0x001F )
+#define DATE_YEAR(d)        ((((d) & 0xFE00) >> 9) + 1980)
+#define DATE_MONTH(d)       (((d) & 0x01E0) >> 5)
+#define DATE_DAY(d)         ((d) & 0x001F)
+
+// store new values in a date field.
+#define SET_YEAR(d, y)      \
+    ((d) |= ((d) & ~0xFE00) | ((((y) - 1980) << 9) & 0xFE00))
+
+#define SET_MONTH(d, m)     \
+    ((d) |= ((d) & ~0x01E0) | (((m) << 5) & 0x01E0)
+
+#define SET_DAY(d, day)     \
+    ((d) |= ((d) & ~0x001F) | (day))
 
 
 // given a fat_volume_t structure, fetch the first sector of the file
 // allocation table, or the number of sectors in the FAT.
 // XXX: FAT_SECTORS is FAT32 specific. Need to be moved.
-#define FAT_START( v )      ( ( v )->bpb->nr_reserved_secs )
-#define FAT_SECTORS( v )    ( ( v )->bpb->sectors_per_fat )
+#define FAT_START(v)        ((v)->bpb->nr_reserved_secs)
+#define FAT_SECTORS(v)      ((v)->bpb->sectors_per_fat)
 
 // fetch the size of a sector in bytes.
-#define SECTOR_SIZE( v )    ( ( v )->bpb->bps )
+#define SECTOR_SIZE(v)      ((v)->bpb->bps)
 
 // fetch the cluster size in bytes.
-#define CLUSTER_SIZE( v )   ( ( v )->bpb->bps * ( v )->bpb->spc )
+#define CLUSTER_SIZE(v)     ((v)->bpb->bps * (v)->bpb->spc)
 
 // get the offset, in bytes, of the first data cluster.
-#define DATA_START( v )     ( ( ( v )->bpb->nr_reserved_secs + ( \
-      ( v )->bpb->nrFATs * ( v )->bpb->sectors_per_fat ) ) * \
-      SECTOR_SIZE ( v ) )
+#define DATA_START(v)       (((v)->bpb->nr_reserved_secs +  \
+      ((v)->bpb->nrFATs * (v)->bpb->sectors_per_fat)) * SECTOR_SIZE (v))
 
 // get the offset in bytes of a given cluster on a given volume.
 // first parameter points to the volume struct, second to a cluster list
 // struct. Note that the clusters start at index 2, because the first two
 // entries in the FAT are reserved. This is why we subtract 2 from the
 // cluster index.
-#define CLUSTER_OFFSET( v, cl ) \
-    ( DATA_START ( v ) + CLUSTER_SIZE ( v ) * ( ( cl )->cluster_id - 2)
+#define CLUSTER_OFFSET(v, cl) \
+    (DATA_START (v) + CLUSTER_SIZE (v) * ((cl)->cluster_id - 2)
 
 
 /**

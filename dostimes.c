@@ -54,6 +54,74 @@ unix_time (date, time)
 }
 
 /**
+ *  Given a UNIX time value, calculate the corresponding time field (ie.
+ *  hours, minutes and seconds) in DOS time.
+ *
+ *  Lowest 16 bits of return value is the DOS time field.
+ */
+    PUBLIC unsigned int
+dos_time (utime)
+    time_t utime;       // UNIX time to convert.
+{
+    unsigned int dtime = 0;
+
+    // we are only interested in the number of seconds since 00:00:00
+    // today.
+    utime %= SECONDS_PER_DAY;
+
+    // we will make use of macros to assign time values to the appropriate
+    // bit regions of the DOS time field.
+    SET_HOUR (dtime, utime / SECONDS_PER_HOUR);
+    utime %= SECONDS_PER_HOUR;
+
+    SET_MINUTE (dtime, utime / SECONDS_PER_MINUTE);
+    utime %= SECONDS_PER_MINUTE;
+
+    SET_SECOND (dtime, utime);
+
+    return dtime;
+}
+
+/**
+ *  Given a UNIX time value, caclulate the date in DOS time.
+ *
+ *  Low 16 bits of the return value is the DOS date field.
+ */
+    PUBLIC unsigned int
+dos_date (utime)
+    time_t utime;       // UNIX time to convert.
+{
+    unsigned int dtime = 0, days, month, year;
+    
+    // get the number of days since the epoch.
+    utime /= SECONDS_PER_DAY;
+
+    // work out how many years have elapsed since the epoch, by stepping
+    // the year forward from 1970 until the number of days since epoch is
+    // greater than utime.
+    for (year = 1970; days_since_epoch (year) <= utime; year += 1)
+        ;
+
+    // set the date field.
+    SET_YEAR (dtime, year - 1);
+    utime -= days_since_epoch (year - 1);
+
+    // work out how many months have elapsed since the start of the year,
+    // by summing up the months from the start of the year.
+    for (month = 1, days = 0; days < utime; 
+      days = days_this_month (month ++, year))
+    {
+        utime -= days;
+    }
+
+    // set the month and day fields.
+    SET_MONTH (dtime, month - 1);
+    SET_DAY (dtime, utime);
+
+    return dtime;
+}
+
+/**
  *  Returns the number of days from the UNIX epoch up until the start of
  *  this year.
  */
