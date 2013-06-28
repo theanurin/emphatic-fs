@@ -137,8 +137,8 @@ typedef uint32_t fat_entry_t;
  */
 typedef struct
 {
-    uint8_t     jmpBoot [ 3 ];
-    char        OEM_name [ OEM_LEN ];
+    uint8_t     jmpBoot [3];
+    char        OEM_name [OEM_LEN];
 
     // size of a sector in bytes (usually 512) and cluster size in sectors
     // (a small power of 2, like 8 or 16).
@@ -200,7 +200,7 @@ typedef struct
     uint16_t    boot_backup_sector;
 
     // reserved for future use.
-    uint8_t     reserved [ 12 ];
+    uint8_t     reserved [12];
 
     // BIOS drive number? Not used and should definitely not be trusted.
     uint8_t     drive_num;
@@ -213,12 +213,12 @@ typedef struct
     uint32_t    volume_id;
 
     // volume label string. User defined.
-    char        vol_label [ LABEL_LEN ];
+    char        vol_label [LABEL_LEN];
 
     // file system type. Unknown use.
     uint8_t     fat_type;
 }
-__attribute__ (( packed )) fat_super_block_t;
+__attribute__ ((packed)) fat_super_block_t;
 
 
 /**
@@ -248,7 +248,7 @@ typedef struct
     // last magic. Should be 0xAA55, same as the boot sector magic.
     uint32_t    magic3;
 }
-__attribute__ (( packed )) fat_fsinfo_t;
+__attribute__ ((packed)) fat_fsinfo_t;
 
 
 /**
@@ -257,7 +257,7 @@ __attribute__ (( packed )) fat_fsinfo_t;
 typedef struct
 {
     // file name. 8 chars plus 3 char file extension.
-    char        fname [ DIR_NAME_LEN ];
+    char        fname [DIR_NAME_LEN];
 
     // attribute bitmap. Bit meanings are defined in the constants.
     uint8_t     attributes;
@@ -286,11 +286,11 @@ typedef struct
     // size of the file in bytes.
     uint32_t    size;
 }
-__attribute__ (( packed )) fat_direntry_t;
+__attribute__ ((packed)) fat_direntry_t;
 
 // This macro provides the cluster index of the first cluster in the
 // chain.
-#define DIR_CLUSTER_START( d )      (((d)->cluster_msb << 16) | \
+#define DIR_CLUSTER_START(d)        (((d)->cluster_msb << 16) | \
   ((d)->cluster_lsb))
 #define PUT_DIRENTRY_CLUSTER(dir, cluster)              \
     ((dir)->cluster_msb = ((cluster) >> 16));           \
@@ -353,8 +353,8 @@ typedef struct
     // write operation will take place.
     cluster_list_t  *current_cluster;
 
-    // file directory entry.
-    fat_direntry_t  *entry;
+    // i-node of the file's parent directory.
+    fat_entry_t     directory_inode;
 
     // size of the file in bytes.
     size_t          size;

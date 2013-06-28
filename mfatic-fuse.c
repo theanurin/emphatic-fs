@@ -56,7 +56,7 @@ PRIVATE int mfatic_rename (const char *old, const char *new);
 PRIVATE int mfatic_truncate (const char *path, off_t length);
 
 // change the access and/or modification times of a file.
-PRIVATE int mfatic_utime (const char *path, const struct utimbuf *time);
+PRIVATE int mfatic_utimens (const char *path, const struct timespec *tv);
 
 
 // Pointer to a struct containing information about the mounted file system
@@ -79,7 +79,7 @@ PRIVATE struct fuse_operations mfatic_ops =
     .rmdir      = mfatic_rmdir,
     .rename     = mfatic_rename,
     .truncate   = mfatic_truncate,
-    .utime      = mfatic_utime,
+    .utimens    = mfatic_utimens,
     .open       = mfatic_open,
     .read       = mfatic_read,
     .write      = mfatic_write,
@@ -154,6 +154,9 @@ mfatic_read (name, buf, nbytes, offset, fd)
 {
     fat_file_t *rf = (fat_file_t *) fd->fh;
 
+    // update the access time field for this file.
+    update_atime (rf, time (NULL));
+
     // seek to the start offset requested.
     if (fat_seek (rf, offset, SEEK_SET) != offset)
         return EOF;
@@ -178,6 +181,9 @@ mfatic_write (name, buf, nbytes, offset, fd)
     struct fuse_file_info *fd;  // file handle.
 {
     fat_file_t *wf = (fat_file_t *) fd->fh;
+
+    // update the time of last modification.
+    update_mtime (wf, time (NULL));
 
     // seek to the offset at which to begin writing.
     if (fat_seek (wf, offset, SEEK_SET) != offset)
@@ -274,6 +280,41 @@ mfatic_readdir (path, buffer, filler, offset, fd)
         unpack_attributes (&entry, &attrs);
     }
     while ((*filler) (buffer, entry->fname, &attrs, offset += 1) != 1);
+
+    return 0;
+}
+
+/**
+ *  Change the access and/or modification times for a given file to given
+ *  values.
+ */
+    PRIVATE int
+mfatic_uimens (path, tv)
+    const char *path;               // path to the target file.
+    const struct timespec *tv;      // array containing the times to set.
+{
+    fat_file_t *fd;
+    int retval;
+
+    // open the target file.
+    if ((retval = fat_open (path, &fd)) != 0)
+        return retval;
+
+    // The user must have write permission on the file in order to modify
+    // it's times. Check that the file is not read only.
+    if ((fd->attributes & ATTR_READ_ONLY) != 0)
+    {
+        // cannot change time stamps on a read only file.
+        fat_close (fd);
+        return -EACCES;
+    }
+
+    // write in the new time values.
+    update_atime (fd, tv [ATIME_INDEX].tv_sec);
+    update_mtime (fd, tv [MTIME_INDEX].tv_sec);
+
+    // done.
+    fat_close (fd);
 
     return 0;
 }
