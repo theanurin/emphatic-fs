@@ -13,9 +13,9 @@ CFLAGS = -std=c99 -Wall -Wextra -D_FILE_OFFSET_BITS=64
 PROG = mfatic-fuse
 
 
-all:		Depend $(PROG) tags
+all:		$(PROG) tags
 
-$(PROG):	$(OBJS)
+$(PROG):	Depend $(OBJS)
 	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
 
 clean:

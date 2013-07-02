@@ -292,9 +292,12 @@ __attribute__ ((packed)) fat_direntry_t;
 // chain.
 #define DIR_CLUSTER_START(d)        (((d)->cluster_msb << 16) | \
   ((d)->cluster_lsb))
+
 #define PUT_DIRENTRY_CLUSTER(dir, cluster)              \
+({                                                      \
     ((dir)->cluster_msb = ((cluster) >> 16));           \
-    ((dir)->cluster_lsb = ((cluster) & 0x0000FFFF);
+    ((dir)->cluster_lsb = ((cluster) & 0x0000FFFF);     \
+})
 
 
 /**
@@ -353,8 +356,10 @@ typedef struct
     // write operation will take place.
     cluster_list_t  *current_cluster;
 
-    // i-node of the file's parent directory.
+    // i-node of the file's parent directory, and index of this file's
+    // directory entry in the table.
     fat_entry_t     directory_inode;
+    unsigned int    dir_entry_index;
 
     // size of the file in bytes.
     size_t          size;

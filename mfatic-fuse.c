@@ -19,6 +19,13 @@
 // Declarations for methods to handle file operations on an mfatic file
 // system.
 //
+// Finish the mounting process that begun with reading the super block
+// before we enter the FUSE framework. This procedure does the IO heavy
+// stuff, like scanning the entire FAT to map out the free space, ensuring
+// that the mount command exits promptly, while this runs in the 
+// background.
+PRIVATE void * mfatic_mount (struct fuse_conn_info *conn);
+
 // Open, read and write are pretty self explanatory. release is called
 // when a file is being closed. The struct fuse_file_info parameter contains
 // a "file handle" which is set by open() and used by the other operations
@@ -68,6 +75,7 @@ PRIVATE fat_volume_t *volume_info;
 // read write and so on.
 PRIVATE struct fuse_operations mfatic_ops =
 {
+    .init       = mfatic_mount,
     .getattr    = mfatic_getattr,
     .access     = mfatic_access,
     .opendir    = mfatic_open,
@@ -280,6 +288,74 @@ mfatic_readdir (path, buffer, filler, offset, fd)
         unpack_attributes (&entry, &attrs);
     }
     while ((*filler) (buffer, entry->fname, &attrs, offset += 1) != 1);
+
+    return 0;
+}
+
+/**
+ *  Truncate a given file to a given length. If the file is originally
+ *  longer than the specified length, the extra data is lost; if the file
+ *  is shorter, extra clusters will be allocated, and zeroed.
+ *
+ *  Return value is 0 on success, or a negative errno on failure.
+ */
+    PRIVATE int
+mfatic_truncate (path, length)
+    const char *path;       // target file.
+    off_t length;           // length to truncate to.
+{
+    fat_file_t *fd;
+    int retval;
+    const char zero = '\0';
+    fat_cluster_t *prev = NULL;
+    size_t oldsize;
+
+    // open the target file.
+    if ((retval = fat_open (path, &fd)) != 0)
+        return retval;
+
+    // change the file size, and seek to EOF.
+    oldsize = fd->size;
+    fd->size = (size_t) length;
+    fat_seek (fd, 0, SEEK_END);
+
+    // check whether the size of the file is greater than or less than the
+    // length we are truncating it to.
+    if (oldsize > length)
+    {
+        // truncated legnth is shorter than existing size, so we will
+        // delete the excess, releasing clusters to the free pool.
+        // First, mark the current cluster as End of File.
+        put_fat_entry (fd->current_cluster->cluster_id, END_CLUSTER_MARK);
+
+        // now step through all the remaining clusters in the list, and
+        // release them to the free space pool.
+        for (fat_cluster_t *cp = fd->current_cluster->next; cp != NULL;
+          cp = cp->next)
+        {
+            release_cluster (cp->cluster_id);
+
+            // release the previous item in the list, if there was a
+            // previous.
+            if (prev != NULL)
+                safe_free (&prev);
+
+            prev = cp;
+        }
+
+        // release the last item in the linked list.
+        safe_free (&prev);
+    }
+    else if (oldsize < length)
+    {
+        // truncatesd length is longer than the existing file size. In
+        // this case, we allocate extra clusters, and zero them. This can
+        // be done simply with a write operation.
+        for (int i = 0; i < (length - oldsize); i ++)
+        {
+            fat_write (fd, &zero, 1);
+        }
+    }
 
     return 0;
 }
