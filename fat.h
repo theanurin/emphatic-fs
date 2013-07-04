@@ -366,6 +366,11 @@ typedef struct
     
     // current offset into the file.
     off_t           offset;
+
+    // number of pointers pointing to this struct. This is equivalent to
+    // the number of tables it is in (ie. 2 for directories, and 1 for
+    // ordinary files).
+    unsigned int    refcount;
 }
 fat_file_t;
 

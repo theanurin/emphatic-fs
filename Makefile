@@ -33,7 +33,7 @@ tags:		$(SRC)
 # list of dependencies is then included in the Makefile, to ensure that
 # if a header file is modified, the appropriate source files are 
 # recompiled.
-Depend:		$(SRC)
+Depend:	
 	gcc $(CFLAGS) -MM $(SRC) > Depend
 
 .PHONY:		all clean scrub tags

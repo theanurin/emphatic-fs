@@ -23,6 +23,9 @@ PRIVATE bool search_directory (fat_file_t *dir, const char *name,
 // system.
 PRIVATE fat_volume_t *volume_info;
 
+// list of currently active directories.
+PRIVATE file_list_t *active_dirs;
+
 
 /**
  *  This should be called at mount time, to initialise the volume info
@@ -33,6 +36,7 @@ directory_init (v)
     const fat_volume_info *v;   // info about the mounted file system.
 {
     volume_info = v;
+    active_dirs = NULL;
 }
 
 /**
@@ -94,6 +98,55 @@ fat_lookup_dir (path, entry_buf)
     }
 
     return 0;
+}
+
+/**
+ *  Read a file's directory entry in O(1) time. This uses the directories
+ *  i-node to find it's file descriptor, and an entry index to locate the
+ *  desired entry.
+ */
+    PUBLIC void
+get_directory_entry (buffer, inode, index)
+    fat_direntry_t *buffer;         // buffer to store the entry.
+    fat_entry_t inode;              // identifies the directory to read.
+    unsigned int index;             // entry to read.
+{
+    fat_file_t *dirfd;
+
+    // look up the directories fd in our list of active dirs.
+    if (ilist_lookup_file (active_dirs, &dirfd, inode) != true)
+        return;
+
+    // seek to the entry requested, and read it into the caller's buffer.
+    fat_seek (dirfd, index * sizeof (fat_direntry_t), SEEK_SET);
+    fat_read (dirfd, buffer, sizeof (fat_direntry_t));
+
+    // decrement the refcount that was incremented by the lookup
+    // operation.
+    ilist_unlink (active_dirs, inode);
+}
+
+/**
+ *  Overwrite an existing directory entry with new values.
+ */
+    PUBLIC void
+put_directory_entry (buffer, inode, index)
+    const fat_direntry_t *buffer;   // new entry to write.
+    fat_entry_t inode;              // identifies directory to write on.
+    unsigned int index;             // entry to overwrite.
+{
+    fat_file_t *dirfd;
+
+    // lookup the directories fd.
+    if (ilist_lookup_file (active_dirs, &dirfd, inode) != true)
+        return;
+
+    // seek to the appropriate entry, and write.
+    fat_seek (dirfd, index * sizeof (fat_direntry_t), SEEK_SET);
+    fat_write (dirfd, buffer, sizeof (fat_direntry_t));
+
+    // correct the refcount in the active dirs list.
+    ilist_unlink (active_dirs, inode);
 }
 
 /**

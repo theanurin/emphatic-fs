@@ -30,6 +30,7 @@ ilist_add (list, fd)
     // fill in the newly allocated structure.
     new_item->file = fd;
     new_item->refcount = 1;
+    fd->refcount += 1;
     new_item->next = *list;
 
     // link the new item onto the head of the list.
@@ -93,6 +94,11 @@ ilist_unlink (list, inode)
     *item = (*item)->next;
     fd = temp->file;
     safe_free (&temp);
+
+    // decrement the count of tables that the file structure is referenced
+    // from.
+    if ((fd->refcount -= 1) != 0)
+        return;
 
     // Free the memory used by the file structure, including the file
     // name, and list of clusters.

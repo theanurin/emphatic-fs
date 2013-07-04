@@ -18,6 +18,10 @@ extern time_t unix_time (unsigned int dos_date, unsigned int dos_time);
 extern unsigned int dos_date (time_t utime);
 extern unsigned int dos_time (time_t utime);
 
+// update the accessed and modified time stamps on a file.
+extern void update_atime (fat_file_t *fd, time_t new_atime);
+extern void update_mtime (fat_file_t *fd, time_t new_mtime);
+
 
 #endif // MFATIC_DOSTIMES_H
 

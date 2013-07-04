@@ -122,6 +122,48 @@ dos_date (utime)
 }
 
 /**
+ *  Store a new value in a file's accessed time stamp.
+ */
+    PUBLIC void
+update_atime (fd, new_atime)
+    const fat_file_t *fd;   // target file.
+    time_t new_atime;       // new accessed time, in UNIX format.
+{
+    fat_direntry_t entry;
+
+    // retrieve the file's directory entry.
+    get_directory_entry (&entry, fd->directory_inode, fd->dir_entry_index);
+
+    // calculate the DOS format value for the accessed date field, and
+    // store it in the dir entry.
+    entry.accessed_date = (uint16_t) dos_date (new_atime);
+
+    // write back the modified dir entry.
+    put_directory_entry (&entry, fd->directory_inode, fd->dir_entry_index);
+}
+
+/**
+ *  Store a new value in a file's modified time stamp.
+ */
+    PUBLIC void
+update_mtime (fd, new_mtime)
+    const fat_file_t *fd;   // target file.
+    time_t new_mtime;       // new modified time, in UNIX format.
+{
+    fat_direntry_t entry;
+
+    // retrieve directory entry for the file.
+    get_directory_entry (&entry, fd->directory_inode, fd->dir_entry_index);
+
+    // store the new DOS format date and time values.
+    entry.write_time = (uint16_t) dos_time (new_mtime);
+    entry.write_date = (uint16_t) dos_date (new_mtime);
+
+    // write the modified entry back.
+    put_directory_entry (&entry, fd->directory_inode, fd->dir_entry_index);
+}
+
+/**
  *  Returns the number of days from the UNIX epoch up until the start of
  *  this year.
  */

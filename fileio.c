@@ -71,7 +71,12 @@ fat_open (path, fd)
     // which completes the open() routine.
     if (ilist_lookup_file (&files_list, fd, DIR_CLUSTER_START (&dir)) 
       == true)
+    {
         return 0;
+    }
+
+    // allocate a new file struct.
+    *fd = safe_malloc (sizeof (fat_file_t));
 
     // allocate space for the name string. Append a null byte to the end
     // to mark the end of the string, in case the filename takes up all 11
@@ -103,6 +108,7 @@ fat_open (path, fd)
     (*fd)->size = (size_t) dir.size;
     (*fd)->offset = 0;
     (*fd)->current_cluster = (*fd)->clusters;
+    (*fd)->refcount = 0;    // this will be incremented by ilist_add.
 
     // add the newly opened file to the open files list.
     ilist_add (&files_list, *fd);
