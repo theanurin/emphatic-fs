@@ -44,32 +44,28 @@ fileio_init (v)
 }
 
 /**
- *  lookup a file's directory entry, and fill in a file struct with
- *  information about that file, including its cluster list. The struct
- *  must have the volume and mode fields filled in.
+ *  Given a directory entry, create a new file structure, and read in the
+ *  linked list of clusters. A pointer to this structure will be stored at
+ *  the location pointed to by the second parameter.
  *
  *  Return value is 0 on success, or a negative errno on failure.
  */
     PUBLIC int
-fat_open (path, fd)
-    const char *path;   // path from mount point to the file.
-    fat_file_t **fd;    // pointer to a file struct pointer to fill in.
+fat_open (entry, inode, index, fd)
+    const fat_direntry_t *entry;    // directory entry for the file.
+    fat_entry_t inode;              // parent dir inode.
+    unsigned int index;             // dir entry index.
+    fat_file_t **fd;                // file handle to be filled in.
 {
-    fat_direntry_t dir;
     int retval;
-    fat_entry_t FAT [BUF_SIZE];
-    off_t fat_offset, fat_segment, next_segment;
+    off_t fat_offset;
     fat_entry_t this_cluster;
     cluster_list_t **next_item;
-
-    // obtain the directory entry corresponding to the file being opened.
-    if ((retval = fat_lookup_dir (volume_info, path, &dir)) != 0)
-        return retval;
 
     // check to see if the file is already open. If so, ilist_lookup_file
     // will store the pointer to *fd, and increment the references field,
     // which completes the open() routine.
-    if (ilist_lookup_file (&files_list, fd, DIR_CLUSTER_START (&dir)) 
+    if (ilist_lookup_file (&files_list, fd, DIR_CLUSTER_START (entry)) 
       == true)
     {
         return 0;
@@ -82,13 +78,13 @@ fat_open (path, fd)
     // to mark the end of the string, in case the filename takes up all 11
     // chars.
     (*fd)->name = safe_malloc (sizeof (char) * DIR_NAME_LEN + 1);
-    strncpy ((*fd)->name, dir.fname, DIR_NAME_LEN);
+    strncpy ((*fd)->name, entry->fname, DIR_NAME_LEN);
     (*fd)->name [DIR_NAME_LEN] = '\0';
 
     // read the chain of cluster addresses from the file allocation table
     // on the disk, and store them in a linked list in memory, to minimise
     // seek operations on the disk later on. 
-    this_cluster = DIR_CLUSTER_START (&dir);
+    this_cluster = DIR_CLUSTER_START (entry);
     next_item = &((*fd)->clusters);
 
     while (IS_LAST_CLUSTER (this_cluster) == false)
@@ -105,9 +101,12 @@ fat_open (path, fd)
     }
 
     // store the file size, and set the current offset to 0.
-    (*fd)->size = (size_t) dir.size;
+    (*fd)->size = (size_t) entry->size;
     (*fd)->offset = 0;
     (*fd)->current_cluster = (*fd)->clusters;
+    (*fd)->attributes = entry->attributes;
+    (*fd)->directory_inode = inode;
+    (*fd)->dir_entry_index = index;
     (*fd)->refcount = 0;    // this will be incremented by ilist_add.
 
     // add the newly opened file to the open files list.

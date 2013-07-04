@@ -24,7 +24,8 @@ extern void fileio_init (const fat_volume_t *v);
 // locate a file on a device, and fill in the file struct pointed to by the
 // second param. The file struct must have the volume and mode fields filled
 // in before the call to this procedure.
-extern int fat_open (const char *path, fat_file_t *fd);
+extern int fat_open (const fat_direntry_t *entry, fat_entry_t inode, 
+  unsigned int index, fat_file_t **fd);
 extern int fat_close (fat_file_t *fd);
 
 // read and write from a file.

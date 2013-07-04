@@ -11,7 +11,6 @@
 #ifndef MFATIC_DIRECTORY_H
 #define MFATIC_DIRECTORY_H
 
-
 // needed for definitions of volume and direntry structs.
 #include "fat.h"
 
@@ -27,6 +26,10 @@ extern void get_directory_entry (fat_direntry_t *buffer,
   fat_entry_t inode, unsigned int index);
 extern void put_directory_entry (const fat_direntry_t *buffer,
   fat_entry_t inode, unsigned int index);
+
+// release a file's parent dir. This should be called when the file is
+// being closed.
+extern void release_parent_dir (const fat_file_t *fd);
 
 
 #endif // MFATIC_DIRECTORY_H

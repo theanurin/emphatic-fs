@@ -16,7 +16,8 @@
 PRIVATE int root_direntry (fat_direntry_t *buffer);
 PRIVATE bool is_directory (fat_file_t *file);
 PRIVATE bool search_directory (fat_file_t *dir, const char *name,
-  fat_direntry_t *found);
+  fat_direntry_t *found, unsigned int *index);
+PRIVATE void remove_separators (char *pathname);
 
 
 // global pointer to the volume information struct for the mounted file
@@ -47,55 +48,61 @@ directory_init (v)
  *  errno.
  */
     PUBLIC int
-fat_lookup_dir (path, entry_buf)
+fat_lookup_dir (path, buffer, inode, index)
     const char *path;           // file name to look up.
-    fat_direntry_t *entry_buf;  // pointer to the direntry struct to fill.
+    fat_direntry_t *buffer;     // pointer to the direntry struct to fill.
+    fat_entry_t *inode;         // put parent dir's i-node number here.
+    unsigned int *index;        // put dir index here.
 {
-    char *parent = strdupa (path), *file;
-    fat_direntry_t parent_entry;
+    char *file = strdupa (path);
+    fat_file_t *parent_fd;
 
-    // step backwards through the path until we find the '/' separator.
-    // We will replace it, temporarily, with '\0'; that way the parent dir
-    // is the string on the left (now terminated where the separator was)
-    // and the file we have to look up is the string to the right of the
-    // null byte.
-    for (file = parent + strlen (parent); 
-      (*file != '/') && (file != parent); file -= 1)
+    // first, we will convert all the path separators into null bytes,
+    // so that the path becomes a collection of file name strings.
+    remove_separators (file);
+
+    // get the root directory entry, to begin the search.
+    root_direntry (buffer);
+
+    // Traverse the directory tree. This is done by opening whatever file
+    // buffer refers to, and copying file's dir entry into buffer.
+    // Then file becomes the new parent, and the next string in the path
+    // name becomes the new file.
+    do
     {
-        ;
+        fat_open (buffer, 0, 0, &parent_fd);
+        *parent_inode = DIR_CLUSTER_START (buffer);
+
+        // check the file is a directory.
+        if (is_directory (parent_fd) != true)
+        {
+            // no. Bad path name.
+            fat_close (parent_fd);
+            return -ENOTDIR;
+        }
+
+        // search the directory for the next file in the path.
+        if (search_directory (parent_fd, file, buffer, child_index) !=
+          true)
+        {
+            // no such file or directory.
+            fat_close (parent_fd);
+            return -ENOENT;
+        }
+
+        // move on to the next component of the path name.
+        file += strlen (file) + 1;
+
+        // If we have finished path name translation, we want to keep
+        // the file's parent directory open, to add it to the list of
+        // active directories.
+        if (*file != '\0')
+            fat_close (parent_fd);
     }
+    while (*file != '\0');
 
-    *file = '\0';
-    file += 1;
-
-    // base case of the recursion is when the path is empty. This ocurrs
-    // when we are looking up the root directory.
-    if (*parent == '\0')
-    {
-        // fill in the directory structure with dummy values, as the root
-        // directory does not *actually* ocurr in any directory.
-        return root_direntry (entry_buf);
-    }
-
-    // open the parent directory.
-    if ((retval = fat_open (parent, &parent_fd)) != 0)
-        return retval;
-
-    // check the parent file descriptor's attribute bits, to make sure
-    // it is a directory, not a mangled path.
-    if (is_directory (&parent_fd) != true)
-    {
-        // bad path. close the file descriptor and return an error.
-        fat_close (parent_fd);
-        return -ENOTDIR;
-    }
-
-    // search the parent directory for our file's entry.
-    if (search_directory (parent_fd, file, entry_buf) != true)
-    {
-        fat_close (parent_fd);
-        return -ENOENT;
-    }
+    // Add the file's parent directory to the active directories list.
+    ilist_add (active_dirs, parent_fd);
 
     return 0;
 }
@@ -150,6 +157,16 @@ put_directory_entry (buffer, inode, index)
 }
 
 /**
+ *  Release a file's parent directory from the list of active directories.
+ */
+    PUBLIC void
+release_parent_dir (fd)
+    const fat_file_t *fd;       // target file.
+{
+    ilist_unlink (active_dirs, fd->directory_inode);
+}
+
+/**
  *  Fill in a directory entry struct with the appropriate fields for the
  *  root directory of the mounted FAT file system.
  *
@@ -199,13 +216,17 @@ is_directory (file)
  *  is stored at *found. If no match is found, this function returns false.
  */
     PRIVATE bool
-search_directory (dir, name, found)
+search_directory (dir, name, found, index)
     fat_file_t *dir;            // directories file handle for reading.
     const char *name;           // name to look up.
     fat_direntry_t *found;      // buffer to store a match.
+    unsigned int *index;        // dir index will be stored here.
 {
     // start searching at the start of the directory.
     fat_seek (dir, 0, SEEK_SET);
+
+    // clear the index counter.
+    *index = 0;
 
     // step through all the directory entries in the table.
     do
@@ -214,11 +235,37 @@ search_directory (dir, name, found)
         // ie. read returns 0, then no match was found.
         if (fat_read (dir, &found, sizeof (fat_direntry_t)) == 0)
             return false;
+
+        // increment the index count.
+        *index += 1;
     }
     while (strncmp (name, dir->fname, DIR_NAME_LEN) != 0);
 
+    // correct index counter for the final iteration of the loop.
+    *index -= 1;
+
     // we can only exit the loop if a match was found.
     return true;
+}
+
+/**
+ *  Step through a path name, and turn all the separators into null bytes.
+ *  This has the effect of turning a path name into a list of
+ *  subdirectories to iteratively search.
+ */
+    PRIVATE void
+remove_separators (pathname)
+    char *pathname;     // pointer to pathname to process.
+{
+    while (*pathname != '\0')
+    {
+        if (*pathname == '/')
+        {
+            *pathname = '\0';
+        }
+
+        pathname += 1;
+    }
 }
 
 
