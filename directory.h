@@ -31,6 +31,10 @@ extern void put_directory_entry (const fat_direntry_t *buffer,
 // being closed.
 extern void release_parent_dir (const fat_file_t *fd);
 
+// procedures to delete a directory entry, or write a new entry.
+extern void dir_delete_entry (const fat_file_t *dirfd, unsigned int index);
+extern void dir_write_entry (fat_file_t *dirfd, const fat_direntry_t entry);
+
 
 #endif // MFATIC_DIRECTORY_H
 

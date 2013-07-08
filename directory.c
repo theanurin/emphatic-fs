@@ -18,6 +18,7 @@ PRIVATE bool is_directory (fat_file_t *file);
 PRIVATE bool search_directory (fat_file_t *dir, const char *name,
   fat_direntry_t *found, unsigned int *index);
 PRIVATE void remove_separators (char *pathname);
+PRIVATE unsigned int get_directory_size (const fat_file_t *dirfd);
 
 
 // global pointer to the volume information struct for the mounted file
@@ -167,6 +168,56 @@ release_parent_dir (fd)
 }
 
 /**
+ *  Delete an existing directory entry from a given directory. This is
+ *  done by swapping the entry to the end of the array of dir entries, and
+ *  marking the last entry as free; equivalent to the method of deleting
+ *  an item from an array by swapping with the end, and decrementing the
+ *  array length.
+ */
+    PUBLIC void
+dir_delete_entry (dirfd, index)
+    const fat_file_t *dirfd;        // directory to delete from.
+    unsigned int index;             // index of the entry to delete.
+{
+    fat_direntry_t last;
+    unsigned int last_index = get_directory_size (dirfd);
+
+    // seek to and read the last entry. This will then be used to overwrite
+    // the entry that is to be deleted.
+    fat_seek (dirfd, (last_index - 1) * sizeof (fat_direntry_t), SEEK_SET);
+    fat_read (dirfd, &last, sizeof (fat_direntry_t));
+
+    // now overwrite the entry that is to be deleted with the last entry
+    // in the directory; effectively a swap.
+    fat_seek (dirfd, index * sizeof (fat_direntry_t), SEEK_SET);
+    fat_write (dirfd, &last, sizeof (fat_direntry_t));
+
+    // and finally, overwrite the last entry, so that the first byte of
+    // the name is null, which identifies the entry as being unused.
+    last.fname [0] = '\0';
+    fat_seek (dirfd, (last_index - 1) * sizeof (fat_direntry_t), SEEK_SET);
+    fat_write (dirfd, &last, sizeof (fat_direntry_t));
+}
+
+/**
+ *  Add a new directory entry, given a file descriptor for the directory.
+ *  New entries are simply appended onto the list of existing entries.
+ */
+    PUBLIC void
+dir_write_entry (dirfd, entry)
+    const fat_file_t *dirfd;        // directory to insert in.
+    const fat_direntry_t *entry;    // new entry to write.
+{
+    unsigned int last_index = get_directory_size (dirfd);
+
+    // seek to after all the dir entries.
+    fat_seek (dirfd, last_index * sizeof (fat_direntry_t), SEEK_SET);
+
+    // write in the new entry.
+    fat_write (dirfd, entry, sizeof (fat_direntry_t));
+}
+
+/**
  *  Fill in a directory entry struct with the appropriate fields for the
  *  root directory of the mounted FAT file system.
  *
@@ -266,6 +317,40 @@ remove_separators (pathname)
 
         pathname += 1;
     }
+}
+
+/**
+ *  Return the number of directory entries that are in use in a given
+ *  directory. This value is also the index at which a new entry should
+ *  be written; after all the existing entries.
+ */
+    PRIVATE unsigned int
+get_directory_size (dirfd)
+    const fat_file_t *dirfd;    // file descriptor of target dir.
+{
+    unsigned int entry_count = 0;
+    fat_direntry_t entry;
+
+    // start at the beginning of the directory.
+    fat_seek (dirfd, 0, SEEK_SET);
+
+    // iteratively read directory entries from the file, until we either
+    // reach the end of the file, or find a free directory entry.
+    while (fat_read (dirfd, &entry, sizeof (fat_direntry_t)) > 0)
+    {
+        // free directory entries are identified by having a NULL byte
+        // as the first byte in the file name.
+        if (entry->fname [0] = '\0')
+        {
+            break;
+        }
+        else
+        {
+            entry_count += 1;
+        }
+    }
+
+    return entry_count;
 }
 
 
