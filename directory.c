@@ -49,10 +49,10 @@ directory_init (v)
  *  errno.
  */
     PUBLIC int
-fat_lookup_dir (path, buffer, inode, index)
+fat_lookup_dir (path, buffer, parent, index)
     const char *path;           // file name to look up.
     fat_direntry_t *buffer;     // pointer to the direntry struct to fill.
-    fat_entry_t *inode;         // put parent dir's i-node number here.
+    fat_file_t *parent;         // file handle of the parent directory.
     unsigned int *index;        // put dir index here.
 {
     char *file = strdupa (path);
@@ -102,8 +102,9 @@ fat_lookup_dir (path, buffer, inode, index)
     }
     while (*file != '\0');
 
-    // Add the file's parent directory to the active directories list.
-    ilist_add (active_dirs, parent_fd);
+    // Store the file handle of the parent directory. The caller may add
+    // this to the active directory list at their discretion.
+    *parent = parent_fd;
 
     return 0;
 }

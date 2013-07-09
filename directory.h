@@ -19,7 +19,8 @@
 extern void directory_init (const fat_volume_t *volinfo);
 
 // look up the directory entry for a particular file.
-extern int fat_lookup_dir (const char *path, fat_direntry_t *d);
+extern int fat_lookup_dir (const char *path, fat_direntry_t *buffer,
+  fat_file_t *parent, unsigned int index);
 
 // read or write a given entry from a given directory.
 extern void get_directory_entry (fat_direntry_t *buffer, 

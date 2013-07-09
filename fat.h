@@ -53,6 +53,9 @@ typedef uint32_t fat_entry_t;
 #define ATTR_DIRECTORY      0x10
 #define ATTR_ARCHIVE        0x20
 
+// file attributes are stored in a single byte bitmap.
+typedef uint8_t fat_attr_t;
+
 
 // The following macros are for interpretting the date and time fields
 // of directory entries.
@@ -371,8 +374,14 @@ typedef struct
     // the number of tables it is in (ie. 2 for directories, and 1 for
     // ordinary files).
     unsigned int    refcount;
+
+    // flags to determine if a file is marked for deletion.
+    unsigned int    flags;
 }
 fat_file_t;
+
+// flags bitmap constants.
+#define FL_DELETE_ON_CLOSE          0x00000001
 
 
 // allow clusters from the allocation table to be read into a linked list
