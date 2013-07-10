@@ -51,7 +51,7 @@ fileio_init (v)
  *  Return value is 0 on success, or a negative errno on failure.
  */
     PUBLIC int
-fat_open (entry, inode, index, fd)
+fat_open_fd (entry, inode, index, fd)
     const fat_direntry_t *entry;    // directory entry for the file.
     fat_entry_t inode;              // parent dir inode.
     unsigned int index;             // dir entry index.
@@ -116,12 +116,46 @@ fat_open (entry, inode, index, fd)
 }
 
 /**
+ *  conventional open system call. Takes a path name, and creates a file
+ *  handle. Note that this procedure basically does a fat_lookup_dir and
+ *  then a fat_open_fd, so cannot be called from either of those functions.
+ */
+    PUBLIC int
+fat_open (path, fd)
+    const char *path;       // absolute path to the file to open.
+    fat_file_t **fd;        // file handle to fill in.
+{
+    fat_file_t *pfd;
+    unsigned int index;
+    fat_direntry entry;
+
+    // look up the file's directory entry.
+    if ((retval = fat_lookup_dir (path, &entry, &pfd, &index)) != 0)
+        return retval;
+
+    // create a file structure.
+    if ((retval = fat_open_fd (&entry, pfd->inode, index, fd)) != 0)
+    {
+        fat_close (pfd);
+        return retval;
+    }
+
+    // add reference for parent directory.
+    add_parent_dir (pfd);
+
+    return 0;
+}
+
+/**
  *  Release the memory allocated to a file structure.
  */
     PUBLIC int
 fat_close (fd)
     fat_file_t *fd;     // pointer to file struct of file being closed.
 {
+    if (fd->directory_inode != 0)
+        release_parent_dir (fd->directory_inode);
+
     ilist_unlink (&files_list, fd->inode);
 
     return 0;

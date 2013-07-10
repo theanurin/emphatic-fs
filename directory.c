@@ -71,8 +71,7 @@ fat_lookup_dir (path, buffer, parent, index)
     // name becomes the new file.
     do
     {
-        fat_open (buffer, 0, 0, &parent_fd);
-        *parent_inode = DIR_CLUSTER_START (buffer);
+        fat_open_fd (buffer, 0, 0, &parent_fd);
 
         // check the file is a directory.
         if (is_directory (parent_fd) != true)
@@ -83,7 +82,7 @@ fat_lookup_dir (path, buffer, parent, index)
         }
 
         // search the directory for the next file in the path.
-        if (search_directory (parent_fd, file, buffer, child_index) !=
+        if (search_directory (parent_fd, file, buffer, index) !=
           true)
         {
             // no such file or directory.
@@ -194,10 +193,10 @@ get_parent_fd (inode)
  *  Release a file's parent directory from the list of active directories.
  */
     PUBLIC void
-release_parent_dir (fd)
-    const fat_file_t *fd;       // target file.
+release_parent_dir (inode)
+    fat_entry_t inode;      // ID that is being unreferenced.
 {
-    ilist_unlink (active_dirs, fd->directory_inode);
+    ilist_unlink (active_dirs, inode);
 }
 
 /**

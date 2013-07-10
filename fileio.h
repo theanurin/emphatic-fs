@@ -21,11 +21,13 @@
 // file system being mounted.
 extern void fileio_init (const fat_volume_t *v);
 
-// locate a file on a device, and fill in the file struct pointed to by the
-// second param. The file struct must have the volume and mode fields filled
-// in before the call to this procedure.
-extern int fat_open (const fat_direntry_t *entry, fat_entry_t inode, 
+// open a file based on it's directory entry. This is primarily used by
+// fat_lookup_dir during path name translation.
+extern int fat_open_fd (const fat_direntry_t *entry, fat_entry_t inode, 
   unsigned int index, fat_file_t **fd);
+
+// conventional open.
+extern int fat_open (const char *path, fat_file_t **fd);
 extern int fat_close (fat_file_t *fd);
 
 // read and write from a file.

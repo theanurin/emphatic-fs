@@ -100,6 +100,11 @@ ilist_unlink (list, inode)
     if ((fd->refcount -= 1) != 0)
         return;
 
+    // if the file is marked for deletion, release it's clusters back to
+    // the free space pool.
+    if ((fd->flags & FL_DELETE_ON_CLOSE) != 0)
+        fat_release (fd);
+
     // Free the memory used by the file structure, including the file
     // name, and list of clusters.
     safe_free (&(fd->name));
