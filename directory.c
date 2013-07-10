@@ -52,7 +52,7 @@ directory_init (v)
 fat_lookup_dir (path, buffer, parent, index)
     const char *path;           // file name to look up.
     fat_direntry_t *buffer;     // pointer to the direntry struct to fill.
-    fat_file_t *parent;         // file handle of the parent directory.
+    fat_file_t **parent;        // file handle of the parent directory.
     unsigned int *index;        // put dir index here.
 {
     char *file = strdupa (path);
@@ -156,6 +156,38 @@ put_directory_entry (buffer, inode, index)
 
     // correct the refcount in the active dirs list.
     ilist_unlink (active_dirs, inode);
+}
+
+/**
+ *  Add a new parent directory to the active directories list.
+ *
+ *  Return value is the ID that can be used to identify the parent dir.
+ */
+    PUBLIC fat_entry_t
+add_parent_dir (parent_fd)
+    fat_file_t *parent_fd;      // file struct of the parent directory.
+{
+    // add the fd to the list.
+    ilist_add (active_dirs, parent_fd);
+
+    return parent_fd->inode;
+}
+
+/**
+ *  look up the file struct of a parent dir, based on it's ID.
+ *
+ *  Return value is a pointer to the file struct.
+ */
+    PUBLIC fat_file_t *
+get_parent_fd (inode)
+    fat_entry_t inode;      // ID to search for.
+{
+    fat_file_t *found;
+
+    if (ilist_lookup_file (active_dirs, &found, inode) != true)
+        return NULL;
+
+    return found;
 }
 
 /**

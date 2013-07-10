@@ -153,6 +153,29 @@ fat_unlink (filename)
 }
 
 /**
+ *  Release the resources allocated to a file on deletion. This procedure
+ *  will remove the file's directory entry, and release all the clusters
+ *  allocated to it back to the free pool.
+ */
+    PUBLIC void
+fat_release (fd)
+    fat_file_t *fd;     // file that is being deleted.
+{
+    cluster_list_t *cp;
+
+    // delete the file's directory entry.
+    dir_delete_entry (get_parent_fd (fd->directory_inode), 
+      fd->dir_entry_index);
+
+    // step through the list of clusters, and release each one. We will
+    // not actually free the memory here; the caller has to do that.
+    for (cp = fd->clusters; cp != NULL; cp = cp->next)
+    {
+        release_cluster (cp->cluster_id);
+    }
+}
+
+/**
  *  Break up a path name into a parent directory and a file. This works by
  *  replacing a single path name separator, between the parent directory
  *  and the file, with a null byte. As such, the parent directory is the
