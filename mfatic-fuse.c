@@ -18,52 +18,28 @@
 
 // Declarations for methods to handle file operations on an mfatic file
 // system.
-//
-// Finish the mounting process that begun with reading the super block
-// before we enter the FUSE framework. This procedure does the IO heavy
-// stuff, like scanning the entire FAT to map out the free space, ensuring
-// that the mount command exits promptly, while this runs in the 
-// background.
 PRIVATE void * mfatic_mount (struct fuse_conn_info *conn);
-
-// Open, read and write are pretty self explanatory. release is called
-// when a file is being closed. The struct fuse_file_info parameter contains
-// a "file handle" which is set by open() and used by the other operations
-// to find the struct used to represent the file.
 PRIVATE int mfatic_open (const char *name, struct fuse_file_info *fd);
 PRIVATE int mfatic_read (const char *name, char *buf, size_t nbytes, 
   off_t off, struct fuse_file_info *fd);
 PRIVATE int mfatic_write (const char *name, const char *buf, size_t nbytes,
   off_t off, struct fuse_file_info *fd);
 PRIVATE int mfatic_release (const char *name, struct fuse_file_info *fd);
-
-// get file or file system metadata.
 PRIVATE int mfatic_getattr (const char *name, struct stat *st);
 PRIVATE int mfatic_statfs (const char *name, struct statvfs *st);
-
-// check if a file can be accessed for mode.
-PRIVATE int mfatic_access (const char *path, int mode);
-
-// create and delete directories and regular files.
 PRIVATE int mfatic_mknod (const char *name, mode_t mode, dev_t dev);
 PRIVATE int mfatic_mkdir (const char *name, mode_t mode);
 PRIVATE int mfatic_unlink (const char *name);
-PRIVATE int mfatic_rmdir (const char *name);
-
-// read the contents of a directory. Opening and closing a directory is
-// done using mfatic_open and mfatic_release, because a directory is,
-// after all, just a file.
 PRIVATE int mfatic_readdir (const char *path, void *buf, fuse_fill_dir_t
   *filler, off_t offset, struct fuse_file_info *fd);
-
-// rename a file
 PRIVATE int mfatic_rename (const char *old, const char *new);
-
-// truncate a file to length bytes.
 PRIVATE int mfatic_truncate (const char *path, off_t length);
-
-// change the access and/or modification times of a file.
 PRIVATE int mfatic_utimens (const char *path, const struct timespec *tv);
+
+// functions used by the main program of the FUSE daemon.
+PRIVATE int parse_command_opts (int argc, char **argv);
+PRIVATE void print_usage (void);
+PRIVATE void print_version (void);
 
 
 // Pointer to a struct containing information about the mounted file system
@@ -77,14 +53,13 @@ PRIVATE struct fuse_operations mfatic_ops =
 {
     .init       = mfatic_mount,
     .getattr    = mfatic_getattr,
-    .access     = mfatic_access,
     .opendir    = mfatic_open,
     .readdir    = mfatic_readdir,
     .releasedir = mfatic_release,
     .mknod      = mfatic_mknod,
     .mkdir      = mfatic_mkdir,
     .unlink     = mfatic_unlink,
-    .rmdir      = mfatic_rmdir,
+    .rmdir      = mfatic_unlink,
     .rename     = mfatic_rename,
     .truncate   = mfatic_truncate,
     .utimens    = mfatic_utimens,
@@ -256,6 +231,45 @@ mfatic_statfs (name, st)
 }
 
 /**
+ *  Create an ordinary file.
+ */
+    PRIVATE int
+mfatic_mknod (name, mode, dev)
+    const char *name;       // name of file to create.
+    mode_t mode;            // ignored, at present.
+    dev_t dev;              // not used.
+{
+    fat_attr_t new_attributes = 0;
+
+    return fat_create (name, new_attributes);
+}
+
+/**
+ *  Create a directory.
+ */
+    PRIVATE int
+mfatic_mkdir (name, mode)
+    const char *name;       // path to new directory.
+    mode_t mode;            // ignored, at present.
+{
+    fat_attr_t dir_attrs = ATTR_DIRECTORY;
+
+    return fat_create (name, dir_attrs);
+}
+
+/**
+ *  Remove a file system node. This procedure handles both ordinary files
+ *  and directories, by assuming that it is an rmdir operation if invoked
+ *  on a directory.
+ */
+    PRIVATE int
+mfatic_unlink (name)
+    const char *name;   // absolute path of the node to be removed.
+{
+    return fat_unlink (name);
+}
+
+/**
  *  Read information from a directory about the files and/or subdirectories
  *  contained within it.
  */
@@ -290,6 +304,17 @@ mfatic_readdir (path, buffer, filler, offset, fd)
     while ((*filler) (buffer, entry->fname, &attrs, offset += 1) != 1);
 
     return 0;
+}
+
+/**
+ *  Change a file's name, and potentially parent directory.
+ */
+    PRIVATE int
+mfatic_rename (old, new)
+    const char *old;    // file to be renamed.
+    const char *new;    // new name.
+{
+    return fat_rename (old, new);
 }
 
 /**
@@ -365,7 +390,7 @@ mfatic_truncate (path, length)
  *  values.
  */
     PRIVATE int
-mfatic_uimens (path, tv)
+mfatic_utimens (path, tv)
     const char *path;               // path to the target file.
     const struct timespec *tv;      // array containing the times to set.
 {
@@ -393,6 +418,95 @@ mfatic_uimens (path, tv)
     fat_close (fd);
 
     return 0;
+}
+
+/**
+ *  Parse any command line options given to the Emphatic mount command
+ *  line. Note that this procedure only deals with Emphatic specific
+ *  options (help and version), and there may also be options for FUSE,
+ *  which will be ignored by this procedure.
+ */
+    PRIVATE void
+parse_command_opts (argc, argv)
+    int argc;           // number of options given.
+    char **argv;        // vector of text options.
+{
+    int option_index, c;
+    static struct options [] =
+    {
+        {"help",    no_argument,    0, 'h'},
+        {"version", no_argument,    0, 'v'},
+        {0,         0,              0, 0}
+    };
+
+    // check for help or version options. getopt_long returns -1 once
+    // we run out of command line parameters to process.
+    while ((c = getopt_long (argc, argv, "hv", options, &option_index))
+      != -1)
+    {
+        switch (c)
+        {
+        case 'h':
+            // print usage info and exit.
+            print_usage ();
+            exit (0);
+            break;
+
+        case 'v':
+            // print version info and exit.
+            print_version ();
+            exit (0);
+        }
+    }
+
+    // If we reach this point, we must be mounting a device. Do a sanity
+    // test on the length of the parameter list provided on the command
+    // line, to attempt to catch errors, like not specifying a device or
+    // mount point.
+    if (argc < MIN_ARGS)
+    {
+        // too few parameters.
+        print_usage ();
+        exit (0);
+    }
+
+    // device and mountpoint parameters should be at the end of the
+    // parameter list.
+    device_arg = argv [argc - DEVICE_INDEX];
+
+    // swap the mountpoint and device args for FUSE.
+    argv [argc - DEVICE_INDEX] = argv [argc - MOUNTPOINT_INDEX];
+}
+
+/**
+ *  Print out usage information for the Emphatic FUSE daemon.
+ */
+    PRIVATE void
+print_usage (void)
+{
+    printf ("mfatic-fuse: FUSE mount tool for FAT32 file systems.\n\n"
+      "USAGE:\n"
+      "\tmfatic-fuse [-hv]\n"
+      "\tmfatic-fuse [options] device directory\n\n"
+      "COMMAND LINE OPTIONS:\n"
+      "\t-h --help    print this information\n"
+      "\t-v --version print version information\n"
+      "\toptions      FUSE specific options. See the man page for\n"
+      "\t             fuse(8) for a list.\n");
+}
+
+/**
+ *  Print out the version of the Emphatic FUSE daemon being used.
+ */
+    PRIVATE void
+print_version (void)
+{
+    printf ("mfatic-fuse: FUSE mount tool for FAT32 file systems.\n\n"
+      "Version: " VERSION_STR "\n\n"
+      "This is free and open source software. Please see the file COPYING\n"
+      "for the terms under which you may use, modify and redistribute\n"
+      "this software. This software has no warranty.\n\n"
+      COPYRIGHT_STR "\n");
 }
 
 
