@@ -14,6 +14,14 @@
 
 // local functions.
 PRIVATE char * decompose_path (char *path);
+PRIVATE int fat_rmdir (fat_file_t *dirfd);
+PRIVATE bool is_reserved_name (const char *name);
+
+
+// list of reserved file names.
+PRIVATE char *reserved_names [] = {".", "..", ""};
+
+#define NR_RESERVED_NAMES           3
 
 
 /**
@@ -141,6 +149,10 @@ fat_unlink (filename)
         return -EACCES;
     }
 
+    // if it is a directory, we need to verify that the directory is empty.
+    if ((fd->attributes & ATTR_DIRECTORY) != 0)
+        return fat_rmdir (fd);
+
     // set the flags bit to indicate that this file is to be released once
     // all open references have been closed.
     fd->flags |= FL_DELETE_ON_CLOSE;
@@ -176,6 +188,41 @@ fat_release (fd)
 }
 
 /**
+ *  Mark a directory for deletion. This will test that the directory is
+ *  empty, but assumes that the caller has confirmed that it is not read
+ *  only.
+ *
+ *  Return value is 0 on success, or a negative errno if the directory is
+ *  not empty.
+ */
+    PRIVATE int
+fat_rmdir (dirfd)
+    fat_file_t *dirfd;  // directory file to be marked for deletion.
+{
+    fat_direntry_t buffer;
+
+    // The directory file may have non zero size, as it could have a few
+    // blank entries (identified because their name starts with a null
+    // byte). Check any entries that are present to make sure they are
+    // not important.
+    while (fat_read (dirfd, &buffer, sizeof (fat_direntry_t)) != 0)
+    {
+        if (is_reserved_name (buffer->fname) != true)
+        {
+            // directory is not empty. Cannot be deleted.
+            fat_close (dirfd);
+            return -ENOTEMPTY;
+        }
+    }
+
+    // mark the directory for deletion.
+    dirfd->flags |= FL_DELETE_ON_CLOSE;
+    fat_close (dirfd);
+
+    return 0;
+}
+
+/**
  *  Break up a path name into a parent directory and a file. This works by
  *  replacing a single path name separator, between the parent directory
  *  and the file, with a null byte. As such, the parent directory is the
@@ -198,6 +245,26 @@ decompose_path (pathname)
     file += 1;
 
     return file;
+}
+
+/**
+ *  Check if a name matches with a reserved name, as defined in the global
+ *  list.
+ */
+    PRIVATE bool
+is_reserved_name (name)
+    const char *name;   // name to test.
+{
+    // step through the reserved names one by one, and return true if we
+    // find a match.
+    for (int i = 0; i < NR_RESERVED_NAMES; i ++)
+    {
+        if (strcmp (reserved_names [i], name) == 0)
+            return true;
+    }
+
+    // name was not found in the list of reserved names.
+    return false;
 }
 
 

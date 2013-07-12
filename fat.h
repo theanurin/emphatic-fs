@@ -234,11 +234,9 @@ __attribute__ ((packed)) fat_super_block_t;
  */
 typedef struct
 {
-    // first magic. Should be 0x41615252.
-    uint32_t    magic1;
-
-    // second magic. Should be 0x61417272.
-    uint32_t    magic2;
+    // magics for verifying that we have a FAT file system.
+    char        magic1 [FSINFO_MAGIC1_LEN];
+    char        magic2 [FSINFO_MAGIC2_LEN];
 
     // number of free clusters in the volume.
     uint32_t    nr_free_clusters;
@@ -248,8 +246,8 @@ typedef struct
     // allocation policy to the traditional driver.
     uint32_t    first_free_cluster;
 
-    // last magic. Should be 0xAA55, same as the boot sector magic.
-    uint32_t    magic3;
+    // last magic.
+    char        magic3 [FSINFO_MAGIC3_LEN];
 }
 __attribute__ ((packed)) fat_fsinfo_t;
 

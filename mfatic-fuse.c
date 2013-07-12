@@ -38,6 +38,9 @@ PRIVATE int mfatic_utimens (const char *path, const struct timespec *tv);
 
 // functions used by the main program of the FUSE daemon.
 PRIVATE int parse_command_opts (int argc, char **argv);
+PRIVATE void init_volume (const char *devname, fat_volume_t **volinfo);
+PRIVATE bool verify_magic (const char *str1, const char *str2, 
+  unsigned int length);
 PRIVATE void print_usage (void);
 PRIVATE void print_version (void);
 
@@ -45,11 +48,10 @@ PRIVATE void print_version (void);
 // Pointer to a struct containing information about the mounted file system
 PRIVATE fat_volume_t *volume_info;
 
-
 // This struct is used by the main loop in the FUSE library to dispatch
 // to our methods for handling operations on an mfatic fs, such as open,
 // read write and so on.
-PRIVATE struct fuse_operations mfatic_ops =
+PRIVATE struct fuse_operations mfatic_callbacks =
 {
     .init       = mfatic_mount,
     .getattr    = mfatic_getattr,
@@ -70,6 +72,61 @@ PRIVATE struct fuse_operations mfatic_ops =
     .statfs     = mfatic_statfs,
 };
 
+// pointer to a string containing the name of the device file that 
+// contains the file system being mounted.
+PRIVATE char *device_file;
+
+
+/**
+ *  Program to mount a FAT32 file system using the FUSE framework.
+ */
+    PUBLIC int
+main (argc, argv)
+    int argc;       // number of command line parameters.
+    char **argv;    // list of parameters.
+{
+    int retval;
+
+    // process any options salient to the FUSE daemon. This is only
+    // really help and version; other options are passed on to the FUSE
+    // framework.
+    parse_command_opts (argc, argv);
+
+    // attempt to open the device file, and read the super block and other
+    // important structures.
+    init_volume (device_file, &volume_info);
+
+    // enter the FUSE framework. This will result in the program becoming
+    // a daemon.
+    retval = fuse_main (argc - 1, argv, &mfatic_callbacks, NULL);
+
+    return retval;
+}
+
+/**
+ *  Complete the mounting process by invoking the init procedures of the
+ *  various components of the Emphatic FUSE daemon. This procedure involves
+ *  some IO heavy stuff, like scanning through the entire FAT in order to
+ *  map out where the free space is on the device, so it is a Good Thing
+ *  that it is done after the mount program has daemonised.
+ *
+ *  The return value from this struct is kept by FUSE in the private_data
+ *  field of fuse_context. Seeing as we do not make use of that, this
+ *  procedure will return NULL.
+ */
+    PRIVATE void *
+mfatic_mount (conn)
+    struct fuse_conn_info *conn;    // ignored.
+{
+    // call all the init functions.
+    directory_init (volume_info);
+    init_clusters_map (volume_info);
+    fileio_init (volume_info);
+    stat_init (volume_info);
+    table_init (volume_info);
+
+    return NULL;
+}
 
 /**
  *  Handle a request to open the file at the absolute path (on our device)
@@ -472,10 +529,95 @@ parse_command_opts (argc, argv)
 
     // device and mountpoint parameters should be at the end of the
     // parameter list.
-    device_arg = argv [argc - DEVICE_INDEX];
+    device_file = argv [argc - DEVICE_INDEX];
 
     // swap the mountpoint and device args for FUSE.
     argv [argc - DEVICE_INDEX] = argv [argc - MOUNTPOINT_INDEX];
+}
+
+/**
+ *  Open a given device file and attempt to read FAT32 file system data
+ *  structures. This procedure will also do some validation (ie. check
+ *  magics).
+ */
+    PRIVATE void
+init_volume (devname, volinfo)
+    const char *devname;        // device file hosting our file system.
+    fat_volume_t **volinfo;     // this will be set by init_volume.
+{
+    int devfd;
+    fat_super_block_t *sb;
+    fat_fsinfo_t *fsinfo;
+
+    // open the device file. This will abort on errors.
+    devfd = safe_open (devname, O_RDWR);
+
+    // now allocate memory for the various data structures.
+    *volinfo = safe_malloc (sizeof (fat_volume_t));
+    sb = safe_malloc (sizeof (fat_super_block_t));
+    fsinfo = safe_malloc (sizeof (fat_fsinfo_t));
+
+    // read in the FAT32 super block (or BPB, if you are Old School).
+    safe_seek (devfd, 0, SEEK_SET);
+    safe_read (devfd, sb, sizeof (fat_super_block_t));
+
+    // read in the fs info sector, field by field as it is not a one to
+    // one mapping of the on disk structure (we ommit all the unused space
+    // to save memory).
+    safe_seek (devfd, sb->fsinfo_sector * sb->bps, SEEK_SET);
+    safe_read (devfd, &(fsinfo->magic1), FSINFO_MAGIC1_LEN);
+    safe_seek (devfd, 480, SEEK_CUR);
+    safe_read (devfd, &(fsinfo->magic2), FSINFO_MAGIC2_LEN + 8);
+    safe_seek (devfd, 12, SEEK_CUR);
+    safe_read (devfd, &(fsinfo->magic3), FSINFO_MAGIC3_LEN);
+
+    // check fsinfo magics.
+    if ((verify_magic (FSINFO_MAGIC1, fsinfo->magic1, FSINFO_MAGIC1_LEN) &&
+          verify_magic (FSINFO_MAGIC2, fsinfo->magic2, FSINFO_MAGIC2_LEN) &&
+          verify_magic (FSINFO_MAGIC3, fsinfo->magic3, FSINFO_MAGIC3_LEN))
+      != true)
+    {
+        // magics don't match. That would indicate that the device is not
+        // formatted as a FAT file system, and we should not continue any
+        // further with the mounting process.
+        fprintf (stderr, PROGNAME ": Error: Could not mount %s due to "
+          "bad magic.\n Are you sure it is a valid FAT32 file system?",
+          devname);
+        exit (1);
+    }
+
+    // fill in the volume info structure.
+    (*volinfo)->devfd = devfd;
+    (*volinfo)->bpb = sb;
+    (*volinfo)->fsinfo = fsinfo;
+}
+
+/**
+ *  compare two magics, of a given length, regardless of the presence
+ *  of NULL bytes. This procedure steps along the two strings for as long
+ *  as they remain identical (including identical null bytes) returning
+ *  only when it reaches the specified length to compare, or a non matching
+ *  character is found.
+ *
+ *  Return value is true if the strings are identical, or fals if they
+ *  differ.
+ */
+    PRIVATE bool
+verify_magic (str1, str2, length)
+    const char *str1;       // expected value.
+    const char *str2;       // actual magic on the device.
+    unsigned int length;    // length to compare for.
+{
+    // step along both strings until we either find a differing character,
+    // or we reach the end, as specified by length.
+    for (int i = 0; i < length; i ++)
+    {
+        if (str1 [i] != str2 [i])
+            return false;
+    }
+
+    // if we reach this point, the strings must be identical.
+    return true;
 }
 
 /**
