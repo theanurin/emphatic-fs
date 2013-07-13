@@ -6,9 +6,17 @@
  *  Author: Matthew Signorini
  */
 
+#include <string.h>
+#include <time.h>
+
+#include "mfatic-config.h"
 #include "const.h"
 #include "utils.h"
 #include "fat.h"
+#include "dostimes.h"
+#include "fileio.h"
+#include "directory.h"
+#include "fat_alloc.h"
 #include "create.h"
 
 
@@ -34,9 +42,11 @@ fat_create (path, attributes)
     const char *path;       // path, including file name to create.
     fat_attr_t attributes;  // attributes for the new file.
 {
+    int retval;
     char *parent = strdupa (path), *file;
-    fat_entry_t new_node;
+    fat_cluster_t new_node;
     fat_direntry_t new_entry;
+    fat_file_t *parent_fd;
     time_t now = time (NULL);
     dos_time_t time_now = dos_time (now);
     dos_date_t date_now = dos_date (now);
@@ -52,7 +62,7 @@ fat_create (path, attributes)
     // build the directory entry for the new file.
     new_node = fat_alloc_node ();
     strncpy (new_entry.fname, file, DIR_NAME_LEN);
-    new_entry.name [DIR_NAME_LEN - 1] = '\0';
+    new_entry.fname [DIR_NAME_LEN - 1] = '\0';
     new_entry.attributes = attributes;
     new_entry.creation_tenths = 0;
     new_entry.creation_time = time_now;
@@ -60,7 +70,7 @@ fat_create (path, attributes)
     new_entry.access_date = date_now;
     new_entry.write_time = time_now;
     new_entry.write_date = date_now;
-    PUT_DIRENTRY_CLUSTER (&new_entry, new_node);
+    put_direntry_cluster (&new_entry, new_node);
     new_entry.size = 0;
 
     // write in the new directory entry.
@@ -84,6 +94,10 @@ fat_rename (oldpath, newpath)
     const char *newpath;    // must not be an existing file.
 {
     char *newparent = strdupa (newpath), *newfile;
+    fat_file_t *newfd, *oldfd;
+    fat_direntry_t entry;
+    unsigned int index;
+    int retval;
 
     // break the paths into a path to a parent dir, and a file name.
     newfile = decompose_path (newparent);
@@ -135,6 +149,7 @@ fat_unlink (filename)
     const char *filename;   // absolute path to the file to delete.
 {
     fat_file_t *fd;
+    int retval;
 
     // open the file. If there are other open instances, this just creates
     // another reference in the open file table.
@@ -207,7 +222,7 @@ fat_rmdir (dirfd)
     // not important.
     while (fat_read (dirfd, &buffer, sizeof (fat_direntry_t)) != 0)
     {
-        if (is_reserved_name (buffer->fname) != true)
+        if (is_reserved_name (buffer.fname) != true)
         {
             // directory is not empty. Cannot be deleted.
             fat_close (dirfd);

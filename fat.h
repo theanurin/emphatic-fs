@@ -29,6 +29,7 @@
 
 // data type for a FAT entry.
 typedef uint32_t fat_entry_t;
+typedef uint32_t fat_cluster_t;
 
 // These macros can be used to test if a given entry in the file allocation
 // table corresponds to the last cluster in a file, or a cluster marked as
@@ -55,6 +56,16 @@ typedef uint32_t fat_entry_t;
 
 // file attributes are stored in a single byte bitmap.
 typedef uint8_t fat_attr_t;
+
+
+// Magic definitions for the FSINFO sector.
+#define FSINFO_MAGIC1_LEN           4
+#define FSINFO_MAGIC2_LEN           4
+#define FSINFO_MAGIC3_LEN           4
+
+#define FSINFO_MAGIC1               "RRaA"
+#define FSINFO_MAGIC2               "rrAa"
+#define FSINFO_MAGIC3               "\0\0\x55\xAA"
 
 
 // The following macros are for interpretting the date and time fields
@@ -294,12 +305,6 @@ __attribute__ ((packed)) fat_direntry_t;
 #define DIR_CLUSTER_START(d)        (((d)->cluster_msb << 16) | \
   ((d)->cluster_lsb))
 
-#define PUT_DIRENTRY_CLUSTER(dir, cluster)              \
-({                                                      \
-    ((dir)->cluster_msb = ((cluster) >> 16));           \
-    ((dir)->cluster_lsb = ((cluster) & 0x0000FFFF);     \
-})
-
 
 /**
  *  This structure contains information about a mounted mfatic volume.
@@ -326,6 +331,16 @@ typedef struct
     fat_fsinfo_t        *fsinfo;
 }
 fat_volume_t;
+
+
+// allow clusters from the allocation table to be read into a linked list
+// in memory, allowing faster access to them.
+typedef struct cluster_list
+{
+    fat_entry_t             cluster_id;
+    struct cluster_list     *next;
+}
+cluster_list_t;
 
 
 /**
@@ -380,16 +395,6 @@ fat_file_t;
 
 // flags bitmap constants.
 #define FL_DELETE_ON_CLOSE          0x00000001
-
-
-// allow clusters from the allocation table to be read into a linked list
-// in memory, allowing faster access to them.
-typedef struct
-{
-    fat_entry_t     cluster_id;
-    cluster_list_t  *next;
-}
-cluster_list_t;
 
 
 #endif // MFATIC_FAT_H

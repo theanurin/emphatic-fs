@@ -248,11 +248,19 @@ mfatic_getattr (path, stat)
     struct stat *st;        // buffer to store the information.
 {
     fat_direntry_t file_info;
+    fat_file_t *parent_fd;
+    unsigned int index;
     int retval;
 
     // fetch the directory entry for the file.
-    if ((retval = fat_lookup_dir (path, &file_info)) != 0)
+    if ((retval = fat_lookup_dir (path, &file_info, &parent_fd, &index)) 
+      != 0)
+    {
         return retval;
+    }
+
+    // we don't need to use the parent directory for anything further.
+    fat_close (parent_fd);
 
     // extract the file's metadata from the directory entry.
     unpack_attributes (&file_info, st);
@@ -338,11 +346,12 @@ mfatic_readdir (path, buffer, filler, offset, fd)
     off_t offset;                   // index of first direntry to read.
     struct fuse_file_info *fd;      // directory file handle.
 {
+    fat_file_t *dirfd = (fat_file_t *) fd->fh;
     fat_direntry_t entry;
     struct stat attrs;
 
     // move the read offset to the start of the first entry to read.
-    if (fat_seek (fd, offset * sizeof (fat_direntry_t), SEEK_SET) != 
+    if (fat_seek (dirfd, offset * sizeof (fat_direntry_t), SEEK_SET) != 
       offset * sizeof (fat_direntry_t))
     {
         return EOF;
@@ -353,7 +362,7 @@ mfatic_readdir (path, buffer, filler, offset, fd)
     do
     {
         // read the next entry.
-        fat_read (fd, &entry, sizeof (fat_direntry_t));
+        fat_read (dirfd, &entry, sizeof (fat_direntry_t));
 
         // unpack file attribute information from the directory entry.
         unpack_attributes (&entry, &attrs);

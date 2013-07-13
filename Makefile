@@ -4,18 +4,21 @@
 # Author: Matthew Signorini
 #
 
-SRC = mfatic-fuse.c fileio.c directory.c fat_alloc.c utils.c
+SRC = create.c directory.c dostimes.c fat_alloc.c fileio.c inode_table.c \
+      mfatic-fuse.c stat.c table.c utils.c
 OBJS = $(SRC:%.c=%.o)
 
 CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra -D_FILE_OFFSET_BITS=64
+CFLAGS = -std=c99 -Wall -Wextra -O0 -g
+MACROS = -D_FILE_OFFSET_BITS=64 -DPROGNAME=$(PROG) -D_GNU_SOURCE
+CFLAGS += $(MACROS)
 
 PROG = mfatic-fuse
 
 
 all:		$(PROG) tags
 
-$(PROG):	Depend $(OBJS)
+$(PROG):	$(OBJS)
 	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
 
 clean:
@@ -33,10 +36,10 @@ tags:		$(SRC)
 # list of dependencies is then included in the Makefile, to ensure that
 # if a header file is modified, the appropriate source files are 
 # recompiled.
-Depend:	
+depend:	
 	gcc $(CFLAGS) -MM $(SRC) > Depend
 
-.PHONY:		all clean scrub tags
+.PHONY:		all clean scrub tags depend
 
 
 include Depend

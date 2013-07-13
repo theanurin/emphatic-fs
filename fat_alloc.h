@@ -29,12 +29,13 @@ extern int free_clusters (void);
 // points to the newly allocated cluster.
 extern fat_cluster_t new_cluster (fat_cluster_t near);
 
+// Allocate a cluster for a new file. In this case, the allocated cluster
+// will be in the middle of the largest contiguous region of free space,
+// ensuring that all files have maximal room to grow.
+extern fat_cluster_t fat_alloc_node (void);
+
 // mark a given cluster as being unallocated.
 extern void release_cluster (fat_cluster_t c);
-
-// Create a new file, and allocate a single cluster to it. The new cluster
-// will be marked in the FAT with the end of chain sentinel.
-extern int fat_create (fat_file_t *newfd);
 
 
 #endif // MFATIC_FAT_ALLOC_H

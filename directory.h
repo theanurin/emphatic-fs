@@ -43,6 +43,9 @@ extern void dir_delete_entry (const fat_file_t *dirfd, unsigned int index);
 extern void dir_write_entry (fat_file_t *dirfd, 
   const fat_direntry_t *entry);
 
+// store a value in a directory entry's start cluster field.
+extern void put_direntry_cluster (fat_direntry_t *entry, fat_cluster_t val);
+
 
 #endif // MFATIC_DIRECTORY_H
 

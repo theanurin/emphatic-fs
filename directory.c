@@ -6,6 +6,7 @@
  *  Author: Matthew Signorini
  */
 
+#include "mfatic-config.h"
 #include "const.h"
 #include "utils.h"
 #include "fat.h"
