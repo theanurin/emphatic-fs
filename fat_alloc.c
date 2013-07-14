@@ -7,10 +7,14 @@
  *  Author: Matthew Signorini
  */
 
+#include <unistd.h>     // needed for SEEK_SET
+
+#include "mfatic-config.h"
 #include "const.h"
-#include "fat.h"
-#include "fat_alloc.h"
 #include "utils.h"
+#include "fat.h"
+#include "table.h"
+#include "fat_alloc.h"
 
 
 // this structure is used to keep a list of what regions of contiguous
@@ -39,10 +43,10 @@ PRIVATE struct free_region ** traverse_map (
   fat_cluster_t cluster);
 
 // callbacks given to traverse_map by get_nearest and get_largest.
-PRIVATE struct free_region * nearest (struct free_region *current,
-  struct free_region *candidate, fat_cluster_t cmp);
-PRIVATE struct free_region * largest (struct free_region *current,
-  struct free_region *candidate, fat_cluster_t cmp);
+PRIVATE struct free_region ** nearest (struct free_region **current,
+  struct free_region **candidate, fat_cluster_t cmp);
+PRIVATE struct free_region ** largest (struct free_region **current,
+  struct free_region **candidate, fat_cluster_t cmp);
 
 PRIVATE unsigned int distance (struct free_region *region, 
   fat_cluster_t cluster);
@@ -90,11 +94,11 @@ init_clusters_map (v)
     current->length = 0;
 
     // seek the device to the start of the FAT.
-    safe_lseek (v->dev_fd, FAT_START (v) * SECTOR_SIZE (v), SEEK_SET);
+    safe_seek (v->dev_fd, FAT_START (v) * SECTOR_SIZE (v), SEEK_SET);
 
     // step through each sector of the FAT, and process all the FAT entries
     // in it.
-    for (int i = 0; i < FAT_SECTORS (v); i ++)
+    for (unsigned int i = 0; i < FAT_SECTORS (v); i ++)
     {
         // read the next sector from the FAT.
         safe_read (v->dev_fd, (void *) entry_buffer, SECTOR_SIZE (v));
@@ -105,7 +109,7 @@ init_clusters_map (v)
     }
 
     // release the memory allocated to our sector buffer.
-    safe_free (&entry_buffer);
+    safe_free ((void **) &entry_buffer);
 }
 
 /**
@@ -203,7 +207,7 @@ build_free_list (buffer, length, list, prev_alloced)
     // step through each FAT entry in the buffer, checking if it is marked
     // as free. Any entry which does not contain the free cluster sentinel
     // is deemed to be already allocated.
-    for (int i = 0; i < length; i ++)
+    for (unsigned int i = 0; i < length; i ++)
     {
         // we can use this macro to compare a FAT entry to the free cluster
         // sentinel.
@@ -282,7 +286,7 @@ get_nearest_free (near)
         // unlink reg from the list.
         temp = *reg;
         *reg = (*reg)->next;
-        safe_free (&temp);
+        safe_free ((void **) &temp);
     }
 
     return alloc;
@@ -305,9 +309,9 @@ get_largest_region (void)
  *  be invoked on each item in the free space list, and a cluster index,
  *  for finding the closest free region (this may be 0 otherwise).
  */
-    PRIVATE struct free_list **
+    PRIVATE struct free_region **
 traverse_map (callback, cluster)
-    struct free_region ** (*callback) (struct free_region **current,
+    struct free_region ** (*callback) (struct free_region **current, 
       struct free_region **candidate, fat_cluster_t cmp);
     fat_cluster_t cluster;      // cluster to locate closest free region.
 {

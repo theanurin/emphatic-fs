@@ -1,7 +1,9 @@
 create.o: create.c mfatic-config.h const.h utils.h fat.h dostimes.h \
  fileio.h directory.h fat_alloc.h create.h
-directory.o: directory.c const.h utils.h fat.h directory.h
-dostimes.o: dostimes.c const.h dostimes.h
+directory.o: directory.c mfatic-config.h const.h utils.h fat.h \
+ inode_table.h fileio.h directory.h
+dostimes.o: dostimes.c mfatic-config.h const.h fat.h directory.h \
+ dostimes.h
 fat_alloc.o: fat_alloc.c const.h fat.h fat_alloc.h utils.h
 fileio.o: fileio.c const.h utils.h fat.h fileio.h
 inode_table.o: inode_table.c const.h fat.h inode_table.h

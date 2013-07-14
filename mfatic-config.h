@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <stddef.h>
 
 // build Emphatic to work with FAT32 file systems. At present, we do not
 // support FAT12/16.

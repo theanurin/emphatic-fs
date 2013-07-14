@@ -6,10 +6,15 @@
  *  Author: Matthew Signorini
  */
 
+#include <string.h>
+#include <unistd.h>
+
 #include "mfatic-config.h"
 #include "const.h"
 #include "utils.h"
 #include "fat.h"
+#include "inode_table.h"
+#include "fileio.h"
 #include "directory.h"
 
 
@@ -19,12 +24,12 @@ PRIVATE bool is_directory (fat_file_t *file);
 PRIVATE bool search_directory (fat_file_t *dir, const char *name,
   fat_direntry_t *found, unsigned int *index);
 PRIVATE void remove_separators (char *pathname);
-PRIVATE unsigned int get_directory_size (const fat_file_t *dirfd);
+PRIVATE unsigned int get_directory_size (fat_file_t *dirfd);
 
 
 // global pointer to the volume information struct for the mounted file
 // system.
-PRIVATE fat_volume_t *volume_info;
+PRIVATE const fat_volume_t *volume_info;
 
 // list of currently active directories.
 PRIVATE file_list_t *active_dirs;
@@ -36,7 +41,7 @@ PRIVATE file_list_t *active_dirs;
  */
     PUBLIC void
 directory_init (v)
-    const fat_volume_info *v;   // info about the mounted file system.
+    const fat_volume_t *v;      // info about the mounted file system.
 {
     volume_info = v;
     active_dirs = NULL;
@@ -123,7 +128,7 @@ get_directory_entry (buffer, inode, index)
     fat_file_t *dirfd;
 
     // look up the directories fd in our list of active dirs.
-    if (ilist_lookup_file (active_dirs, &dirfd, inode) != true)
+    if (ilist_lookup_file (&active_dirs, &dirfd, inode) != true)
         return;
 
     // seek to the entry requested, and read it into the caller's buffer.
@@ -132,7 +137,7 @@ get_directory_entry (buffer, inode, index)
 
     // decrement the refcount that was incremented by the lookup
     // operation.
-    ilist_unlink (active_dirs, inode);
+    ilist_unlink (&active_dirs, inode);
 }
 
 /**
@@ -147,7 +152,7 @@ put_directory_entry (buffer, inode, index)
     fat_file_t *dirfd;
 
     // lookup the directories fd.
-    if (ilist_lookup_file (active_dirs, &dirfd, inode) != true)
+    if (ilist_lookup_file (&active_dirs, &dirfd, inode) != true)
         return;
 
     // seek to the appropriate entry, and write.
@@ -155,7 +160,7 @@ put_directory_entry (buffer, inode, index)
     fat_write (dirfd, buffer, sizeof (fat_direntry_t));
 
     // correct the refcount in the active dirs list.
-    ilist_unlink (active_dirs, inode);
+    ilist_unlink (&active_dirs, inode);
 }
 
 /**
@@ -168,7 +173,7 @@ add_parent_dir (parent_fd)
     fat_file_t *parent_fd;      // file struct of the parent directory.
 {
     // add the fd to the list.
-    ilist_add (active_dirs, parent_fd);
+    ilist_add (&active_dirs, parent_fd);
 
     return parent_fd->inode;
 }
@@ -184,7 +189,7 @@ get_parent_fd (inode)
 {
     fat_file_t *found;
 
-    if (ilist_lookup_file (active_dirs, &found, inode) != true)
+    if (ilist_lookup_file (&active_dirs, &found, inode) != true)
         return NULL;
 
     return found;
@@ -197,7 +202,7 @@ get_parent_fd (inode)
 release_parent_dir (inode)
     fat_entry_t inode;      // ID that is being unreferenced.
 {
-    ilist_unlink (active_dirs, inode);
+    ilist_unlink (&active_dirs, inode);
 }
 
 /**
@@ -209,7 +214,7 @@ release_parent_dir (inode)
  */
     PUBLIC void
 dir_delete_entry (dirfd, index)
-    const fat_file_t *dirfd;        // directory to delete from.
+    fat_file_t *dirfd;              // directory to delete from.
     unsigned int index;             // index of the entry to delete.
 {
     fat_direntry_t last;
@@ -238,7 +243,7 @@ dir_delete_entry (dirfd, index)
  */
     PUBLIC void
 dir_write_entry (dirfd, entry)
-    const fat_file_t *dirfd;        // directory to insert in.
+    fat_file_t *dirfd;              // directory to insert in.
     const fat_direntry_t *entry;    // new entry to write.
 {
     unsigned int last_index = get_directory_size (dirfd);
@@ -267,7 +272,7 @@ root_direntry (entry_buf)
     entry_buf->attributes = ATTR_DIRECTORY;
 
     // get the root directory cluster from the volume information struct.
-    PUT_DIRENTRY_CLUSTER (entry_buf, volume_info->bpb->root_cluster);
+    put_direntry_cluster (entry_buf, volume_info->bpb->root_cluster);
 
     return 0;
 }
@@ -323,7 +328,7 @@ search_directory (dir, name, found, index)
         // increment the index count.
         *index += 1;
     }
-    while (strncmp (name, dir->fname, DIR_NAME_LEN) != 0);
+    while (strncmp (name, found->fname, DIR_NAME_LEN) != 0);
 
     // correct index counter for the final iteration of the loop.
     *index -= 1;
@@ -359,7 +364,7 @@ remove_separators (pathname)
  */
     PRIVATE unsigned int
 get_directory_size (dirfd)
-    const fat_file_t *dirfd;    // file descriptor of target dir.
+    fat_file_t *dirfd;      // file descriptor of target dir.
 {
     unsigned int entry_count = 0;
     fat_direntry_t entry;
@@ -373,7 +378,7 @@ get_directory_size (dirfd)
     {
         // free directory entries are identified by having a NULL byte
         // as the first byte in the file name.
-        if (entry->fname [0] = '\0')
+        if (entry.fname [0] == '\0')
         {
             break;
         }

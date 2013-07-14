@@ -47,7 +47,7 @@ ilist_add (list, fd)
  */
     PUBLIC bool
 ilist_lookup_file (list, fd, inode)
-    const file_list_t **list;       // list to search.
+    file_list_t **list;             // list to search.
     fat_file_t **fd;                // file handle pointer to fill in.
     fat_entry_t inode;              // i-node to search for.
 {

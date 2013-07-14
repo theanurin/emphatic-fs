@@ -109,7 +109,7 @@ typedef uint8_t fat_attr_t;
     ((d) |= ((d) & ~0xFE00) | ((((y) - 1980) << 9) & 0xFE00))
 
 #define SET_MONTH(d, m)     \
-    ((d) |= ((d) & ~0x01E0) | (((m) << 5) & 0x01E0)
+    ((d) |= ((d) & ~0x01E0) | (((m) << 5) & 0x01E0))
 
 #define SET_DAY(d, day)     \
     ((d) |= ((d) & ~0x001F) | (day))

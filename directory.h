@@ -39,7 +39,7 @@ extern fat_file_t * get_parent_fd (fat_entry_t inode);
 extern void release_parent_dir (fat_entry_t inode);
 
 // procedures to delete a directory entry, or write a new entry.
-extern void dir_delete_entry (const fat_file_t *dirfd, unsigned int index);
+extern void dir_delete_entry (fat_file_t *dirfd, unsigned int index);
 extern void dir_write_entry (fat_file_t *dirfd, 
   const fat_direntry_t *entry);
 

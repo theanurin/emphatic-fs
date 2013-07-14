@@ -38,7 +38,7 @@ file_list_t;
 // Procedures for adding items, looking up an item matching a given key,
 // and removing items, from an inode list.
 extern void ilist_add (file_list_t **list, fat_file_t *fd);
-extern bool ilist_lookup_file (const file_list_t **list, fat_file_t **fd, 
+extern bool ilist_lookup_file (file_list_t **list, fat_file_t **fd, 
   fat_entry_t inode);
 extern void ilist_unlink (file_list_t **list, fat_entry_t inode);
 

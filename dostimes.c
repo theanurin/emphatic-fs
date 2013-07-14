@@ -6,7 +6,10 @@
  *  Author: Matthew Signorini
  */
 
+#include "mfatic-config.h"
 #include "const.h"
+#include "fat.h"
+#include "directory.h"
 #include "dostimes.h"
 
 
@@ -30,8 +33,8 @@ PRIVATE unsigned int days_this_month (unsigned int month, unsigned int year);
  */
     PUBLIC time_t
 unix_time (date, time)
-    unsigned int date;      // DOS date.
-    unsigned int time;      // DOS time.
+    dos_date_t date;        // DOS date.
+    dos_time_t time;        // DOS time.
 {
     time_t utime = 0;
 
@@ -40,7 +43,7 @@ unix_time (date, time)
     // number of seconds.
     utime = days_since_epoch (DATE_YEAR (date));
     utime += days_before (DATE_MONTH (date), DATE_YEAR (date));
-    utime += DATE_DAYS (date);
+    utime += DATE_DAY (date);
 
     // and we know how many seconds are in a day, of course.
     utime *= SECONDS_PER_DAY;
@@ -59,11 +62,11 @@ unix_time (date, time)
  *
  *  Lowest 16 bits of return value is the DOS time field.
  */
-    PUBLIC unsigned int
+    PUBLIC dos_time_t
 dos_time (utime)
     time_t utime;       // UNIX time to convert.
 {
-    unsigned int dtime = 0;
+    dos_time_t dtime = 0;
 
     // we are only interested in the number of seconds since 00:00:00
     // today.
@@ -87,11 +90,11 @@ dos_time (utime)
  *
  *  Low 16 bits of the return value is the DOS date field.
  */
-    PUBLIC unsigned int
+    PUBLIC dos_date_t
 dos_date (utime)
     time_t utime;       // UNIX time to convert.
 {
-    unsigned int dtime = 0, days, month, year;
+    dos_date_t dtime = 0, days, month, year;
     
     // get the number of days since the epoch.
     utime /= SECONDS_PER_DAY;
@@ -99,8 +102,11 @@ dos_date (utime)
     // work out how many years have elapsed since the epoch, by stepping
     // the year forward from 1970 until the number of days since epoch is
     // greater than utime.
-    for (year = 1970; days_since_epoch (year) <= utime; year += 1)
+    for (year = 1970; days_since_epoch (year) <= (unsigned int) utime; 
+      year += 1)
+    {
         ;
+    }
 
     // set the date field.
     SET_YEAR (dtime, year - 1);
@@ -136,7 +142,7 @@ update_atime (fd, new_atime)
 
     // calculate the DOS format value for the accessed date field, and
     // store it in the dir entry.
-    entry.accessed_date = (uint16_t) dos_date (new_atime);
+    entry.access_date = (uint16_t) dos_date (new_atime);
 
     // write back the modified dir entry.
     put_directory_entry (&entry, fd->directory_inode, fd->dir_entry_index);
