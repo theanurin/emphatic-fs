@@ -158,6 +158,35 @@ new_cluster (near)
 }
 
 /**
+ *  Allocate a cluster for a newly created file. The policy used by
+ *  Emphatic is to locate the largest contiguous run of free clusters,
+ *  and allocate the cluster in the middle of it. The selected cluster
+ *  will be marked as allocated in the FAT, and will hold the end of
+ *  file marker.
+ *
+ *  Return value is the index of the cluster chosen.
+ */
+    PUBLIC fat_cluster_t
+fat_alloc_node (void)
+{
+    struct free_region *longest = get_largest_region (), *right;
+    fat_entry_t chosen = longest->start + (longest->length / 2);
+
+    // break up the free region into two smaller regions.
+    right = safe_malloc (sizeof (struct free_region));
+    right->start = chosen + 1;
+    right->length = longest->length - (chosen - longest->start);
+    longest->length = chosen - longest->start;
+    right->next = longest->next;
+    longest->next = right;
+
+    // mark the chosen cluster with the end of file sentinel in the FAT.
+    put_fat_entry (chosen, END_CLUSTER_MARK);
+
+    return chosen;
+}
+
+/**
  *  This procedure should be called whenever a cluster is released back
  *  to the pool of free clusters (eg. when a file is permanently deleted).
  *  It will record the cluster as free in the FAT, and will also update

@@ -4,9 +4,12 @@ directory.o: directory.c mfatic-config.h const.h utils.h fat.h \
  inode_table.h fileio.h directory.h
 dostimes.o: dostimes.c mfatic-config.h const.h fat.h directory.h \
  dostimes.h
-fat_alloc.o: fat_alloc.c const.h fat.h fat_alloc.h utils.h
-fileio.o: fileio.c const.h utils.h fat.h fileio.h
-inode_table.o: inode_table.c const.h fat.h inode_table.h
+fat_alloc.o: fat_alloc.c mfatic-config.h const.h utils.h fat.h table.h \
+ fat_alloc.h
+fileio.o: fileio.c mfatic-config.h const.h utils.h fat.h inode_table.h \
+ table.h directory.h fileio.h
+inode_table.o: inode_table.c mfatic-config.h const.h utils.h fat.h \
+ create.h inode_table.h
 mfatic-fuse.o: mfatic-fuse.c const.h utils.h fat.h fileio.h
 stat.o: stat.c const.h utils.h fat.h stat.h
 table.o: table.c const.h utils.h fat.h table.h

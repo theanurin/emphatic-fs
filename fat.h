@@ -129,7 +129,7 @@ typedef uint8_t fat_attr_t;
 
 // get the offset, in bytes, of the first data cluster.
 #define DATA_START(v)       (((v)->bpb->nr_reserved_secs +  \
-      ((v)->bpb->nrFATs * (v)->bpb->sectors_per_fat)) * SECTOR_SIZE (v))
+      ((v)->bpb->nr_FATs * (v)->bpb->sectors_per_fat)) * SECTOR_SIZE (v))
 
 // get the offset in bytes of a given cluster on a given volume.
 // first parameter points to the volume struct, second to a cluster list
@@ -137,7 +137,7 @@ typedef uint8_t fat_attr_t;
 // entries in the FAT are reserved. This is why we subtract 2 from the
 // cluster index.
 #define CLUSTER_OFFSET(v, cl) \
-    (DATA_START (v) + CLUSTER_SIZE (v) * ((cl)->cluster_id - 2)
+    (DATA_START (v) + CLUSTER_SIZE (v) * ((cl)->cluster_id - 2))
 
 
 /**

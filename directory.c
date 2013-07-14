@@ -256,6 +256,21 @@ dir_write_entry (dirfd, entry)
 }
 
 /**
+ *  package the starting cluster of a file into it's directory entry
+ *  structure. This is handled by this function because the most
+ *  significant 16 bits are stored in a different field to the least
+ *  significant bits.
+ */
+    PUBLIC void
+put_direntry_cluster (entry, value)
+    fat_direntry_t *entry;      // directory entry structure to modify.
+    fat_cluster_t value;        // cluster value to package.
+{
+    entry->cluster_lsb = value & 0x0000FFFF;
+    entry->cluster_msb = (value & 0xFFFF0000) >> 15;
+}
+
+/**
  *  Fill in a directory entry struct with the appropriate fields for the
  *  root directory of the mounted FAT file system.
  *

@@ -9,17 +9,22 @@
 
 #include <sys/types.h>
 #include <unistd.h>
+#include <string.h>
 
+#include "mfatic-config.h"
 #include "const.h"
 #include "utils.h"
 #include "fat.h"
+#include "inode_table.h"
+#include "table.h"
+#include "directory.h"
 #include "fileio.h"
 
 
 // local function declarations.
 PRIVATE off_t set_offset (fat_file_t *fd, off_t newoff);
 PRIVATE void update_current_cluster (fat_file_t *fd);
-PRIVATE size_t count_clusters (fat_volume_t *v, size_t nbytes);
+PRIVATE size_t count_clusters (const fat_volume_t *v, size_t nbytes);
 PRIVATE size_t do_io (fat_file_t *fd, size_t nbytes, void *buffer,
   size_t (*safe_io) (int, void *, size_t));
 
@@ -29,7 +34,7 @@ PRIVATE file_list_t *files_list;
 
 // pointer to the global volume information. This will be set by a call to
 // fileio_init at mount time.
-PRIVATE fat_volume_t *volume_info;
+PRIVATE const fat_volume_t *volume_info;
 
 
 /**
@@ -57,8 +62,6 @@ fat_open_fd (entry, inode, index, fd)
     unsigned int index;             // dir entry index.
     fat_file_t **fd;                // file handle to be filled in.
 {
-    int retval;
-    off_t fat_offset;
     fat_entry_t this_cluster;
     cluster_list_t **next_item;
 
@@ -127,7 +130,8 @@ fat_open (path, fd)
 {
     fat_file_t *pfd;
     unsigned int index;
-    fat_direntry entry;
+    fat_direntry_t entry;
+    int retval;
 
     // look up the file's directory entry.
     if ((retval = fat_lookup_dir (path, &entry, &pfd, &index)) != 0)
@@ -186,7 +190,7 @@ fat_read (fd, buffer, nbytes)
 fat_write (fd, buffer, nbytes)
     fat_file_t *fd;     // file descriptor to write to.
     const void *buffer; // data to write.
-    int nbytes;         // no of bytes to be written.
+    size_t nbytes;      // no of bytes to be written.
 {
     size_t cluster_size = CLUSTER_SIZE (volume_info);
     size_t nr_clusters = count_clusters (volume_info, fd->size);
@@ -309,7 +313,7 @@ update_current_cluster (fd)
  */
     PRIVATE size_t
 count_clusters (v, nbytes)
-    fat_volume_t *v;    // volume descriptor. needed for cluster size.
+    const fat_volume_t *v;    // volume descriptor. needed for cluster size.
     size_t nbytes;      // count of bytes being stored.
 {
     size_t clusters = nbytes / CLUSTER_SIZE (v);
@@ -336,8 +340,8 @@ do_io (fd, nbytes, buffer, safe_io)
     size_t (*safe_io) (int, void *, size_t);
 {
     size_t cluster_size = CLUSTER_SIZE (volume_info), block;
-    size_t total_bytes = 0
-    cluster_list *this_cluster = fd->current_cluster;
+    size_t total_bytes = 0;
+    cluster_list_t *this_cluster = fd->current_cluster;
 
     // The first chunk of data to transfer will be either the remaining
     // length in the current cluster, or nbytes, whichever is smaller.

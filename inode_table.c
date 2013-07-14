@@ -6,8 +6,11 @@
  *  Author: Matthew Signorini
  */
 
+#include "mfatic-config.h"
 #include "const.h"
+#include "utils.h"
 #include "fat.h"
+#include "create.h"
 #include "inode_table.h"
 
 
@@ -75,7 +78,7 @@ ilist_unlink (list, inode)
     file_list_t **list;     // list to search for the item.
     fat_entry_t inode;      // key to search for.
 {
-    file_list_t **item = get_inode (list, inode), temp;
+    file_list_t **item = get_inode (list, inode), *temp;
     fat_file_t *fd;
     cluster_list_t *prev = NULL, *cp;
 
@@ -93,7 +96,7 @@ ilist_unlink (list, inode)
     temp = *item;
     *item = (*item)->next;
     fd = temp->file;
-    safe_free (&temp);
+    safe_free ((void **) &temp);
 
     // decrement the count of tables that the file structure is referenced
     // from.
@@ -107,21 +110,21 @@ ilist_unlink (list, inode)
 
     // Free the memory used by the file structure, including the file
     // name, and list of clusters.
-    safe_free (&(fd->name));
+    safe_free ((void **) &(fd->name));
 
     for (cp = fd->clusters; cp != NULL; cp = cp->next)
     {
         // release the item before the current item, as the current item
         // is referenced by the loop update statement.
         if (prev != NULL)
-            safe_free (&prev);
+            safe_free ((void **) &prev);
 
         prev = cp;
     }
 
     // free the last item, and then the file struct.
-    safe_free (&prev);
-    safe_free (&fd);
+    safe_free ((void **) &prev);
+    safe_free ((void **) &fd);
 }
 
 /**
@@ -139,12 +142,12 @@ get_inode (list, inode)
     //
     // \begin{voodoo}
     for ( ; (INODE (*list) != inode) && (*list != NULL); 
-      list = &((*list)->next))
+      list = (const file_list_t **) &((*list)->next))
     {
         ;
     }
 
-    return list;
+    return (file_list_t **) list;
     // \end{voodoo}
 }
 
