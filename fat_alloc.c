@@ -187,6 +187,32 @@ fat_alloc_node (void)
 }
 
 /**
+ *  Allocate one or more new clusters onto the end of an existing file.
+ */
+    PUBLIC void
+alloc_clusters (fd, nr_clusters)
+    fat_file_t *fd;         // file to allocate clusters to.
+    size_t nr_clusters;     // number of clusters to allocate.
+{
+    cluster_list_t *cp, *new_cluster;
+
+    // step to the end of file cluster.
+    for (cp = fd->clusters; cp->next != NULL; cp = cp->next)
+        ;
+
+    // Allocate clusters on the device for the file, and create new cluster
+    // list entries in memory.
+    for ( ; nr_clusters != 0; nr_clusters -= 1)
+    {
+        new_cluster = safe_malloc (sizeof (cluster_list_t));
+        new_cluster->cluster_id = get_nearest_free (cp->cluster_id);
+        new_cluster->next = NULL;
+        cp->next = new_cluster;
+        cp = cp->next;
+    }
+}
+
+/**
  *  This procedure should be called whenever a cluster is released back
  *  to the pool of free clusters (eg. when a file is permanently deleted).
  *  It will record the cluster as free in the FAT, and will also update

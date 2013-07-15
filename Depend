@@ -7,7 +7,7 @@ dostimes.o: dostimes.c mfatic-config.h const.h fat.h directory.h \
 fat_alloc.o: fat_alloc.c mfatic-config.h const.h utils.h fat.h table.h \
  fat_alloc.h
 fileio.o: fileio.c mfatic-config.h const.h utils.h fat.h inode_table.h \
- table.h directory.h fileio.h
+ table.h directory.h fat_alloc.h fileio.h
 inode_table.o: inode_table.c mfatic-config.h const.h utils.h fat.h \
  create.h inode_table.h
 mfatic-fuse.o: mfatic-fuse.c /usr/include/fuse/fuse.h \

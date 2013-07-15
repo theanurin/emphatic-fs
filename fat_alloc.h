@@ -34,6 +34,9 @@ extern fat_cluster_t new_cluster (fat_cluster_t near);
 // ensuring that all files have maximal room to grow.
 extern fat_cluster_t fat_alloc_node (void);
 
+// Allocate multiple new clusters onto the end of an existing file.
+extern void alloc_clusters (fat_file_t *fd, size_t nr_clusters);
+
 // mark a given cluster as being unallocated.
 extern void release_cluster (fat_cluster_t c);
 

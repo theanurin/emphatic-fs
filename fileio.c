@@ -18,6 +18,7 @@
 #include "inode_table.h"
 #include "table.h"
 #include "directory.h"
+#include "fat_alloc.h"
 #include "fileio.h"
 
 
