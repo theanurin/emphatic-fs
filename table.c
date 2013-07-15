@@ -13,6 +13,9 @@
  *  Author: Matthew Signorini
  */
 
+#include <unistd.h>
+
+#include "mfatic-config.h"
 #include "const.h"
 #include "utils.h"
 #include "fat.h"
@@ -46,7 +49,7 @@ struct fat_cluster_cache
 // local procedures for manipulating linked lists of cache items.
 PRIVATE void add_to_mru (cache_entry_t *new_item);
 PRIVATE cache_entry_t * unlink_item (cache_entry_t **item_pointer);
-PRIVATE bool lookup_key (cache_entry_t **found, unsigned int key);
+PRIVATE bool lookup_item (cache_entry_t **found, unsigned int key);
 
 // function to fetch a given FAT sector from the cache.
 PRIVATE fat_entry_t * get_sector (unsigned int index);
@@ -54,7 +57,7 @@ PRIVATE fat_entry_t * get_sector (unsigned int index);
 
 // global pointer to the volume information for the file system that we
 // have mounted.
-PRIVATE fat_volume_t *volume_info;
+PRIVATE const fat_volume_t *volume_info;
 
 // global cache structure.
 PRIVATE struct fat_cluster_cache cache;
@@ -68,10 +71,10 @@ PRIVATE struct fat_cluster_cache cache;
 table_init (v)
     const fat_volume_t *v;      // pointer to volume information.
 {
-    volum_info = v;
+    volume_info = v;
 
     // initialise the cache structure's fields.
-    cache.head = cache.tail = NULL;
+    cache.lru = cache.mru = NULL;
     cache.available = CACHE_SECTORS_MAX;
 }
 
@@ -132,7 +135,7 @@ put_fat_entry (entry, val)
     // bits are reserved, and must not be overwritten on writes. Instead,
     // we have to read the existing contents, and OR them into the new
     // value.
-    safe_read (volume_info->dev_fd, old_val, sizeof (fat_entry_t));
+    safe_read (volume_info->dev_fd, &old_val, sizeof (fat_entry_t));
     safe_seek (volume_info->dev_fd, -1 * sizeof (fat_entry_t), SEEK_CUR);
     val = (old_val & 0xF0000000) | (val & 0x0FFFFFFF);
 
@@ -147,6 +150,8 @@ put_fat_entry (entry, val)
 add_to_mru (new_item)
     cache_entry_t *new_item;    // item to be added.
 {
+    cache_entry_t *temp;
+
     // check the available slot count. If it is zero, we need to evict
     // the least recently used item.
     if (cache.available == 0)
@@ -156,8 +161,8 @@ add_to_mru (new_item)
         temp = unlink_item (&(cache.lru));
 
         // free the sector contents, then the list structure.
-        safe_free (&(temp->sector));
-        safe_free (&temp);
+        safe_free ((void **) &(temp->sector));
+        safe_free ((void **) &temp);
     }
     else
     {

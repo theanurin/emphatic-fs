@@ -10,7 +10,10 @@ fileio.o: fileio.c mfatic-config.h const.h utils.h fat.h inode_table.h \
  table.h directory.h fileio.h
 inode_table.o: inode_table.c mfatic-config.h const.h utils.h fat.h \
  create.h inode_table.h
-mfatic-fuse.o: mfatic-fuse.c const.h utils.h fat.h fileio.h
-stat.o: stat.c const.h utils.h fat.h stat.h
-table.o: table.c const.h utils.h fat.h table.h
+mfatic-fuse.o: mfatic-fuse.c /usr/include/fuse/fuse.h \
+ /usr/include/fuse/fuse_common.h /usr/include/fuse/fuse_opt.h \
+ mfatic-config.h const.h utils.h fat.h directory.h fat_alloc.h stat.h \
+ table.h create.h dostimes.h fileio.h
+stat.o: stat.c mfatic-config.h const.h utils.h fat.h dostimes.h stat.h
+table.o: table.c mfatic-config.h const.h utils.h fat.h table.h
 utils.o: utils.c const.h utils.h

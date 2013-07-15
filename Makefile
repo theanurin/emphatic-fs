@@ -4,14 +4,20 @@
 # Author: Matthew Signorini
 #
 
+VERSION = 0.00.0
+RELEASE = Alpha
+
 SRC = create.c directory.c dostimes.c fat_alloc.c fileio.c inode_table.c \
       mfatic-fuse.c stat.c table.c utils.c
 OBJS = $(SRC:%.c=%.o)
 
 CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -O0 -g
-MACROS = -D_FILE_OFFSET_BITS=64 -DPROGNAME=$(PROG) -D_GNU_SOURCE
+MACROS = -DPROGNAME=\"$(PROG)\" -DVERSION_STR=\"$(VERSION)\ $(RELEASE)\" \
+	 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26
 CFLAGS += $(MACROS)
+CFLAGS += `pkg-config fuse --cflags`
+LIBS = `pkg-config fuse --libs`
 
 PROG = mfatic-fuse
 
@@ -19,7 +25,7 @@ PROG = mfatic-fuse
 all:		$(PROG) tags
 
 $(PROG):	$(OBJS)
-	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+	$(CC) $(CFLAGS) -o $(PROG) $(OBJS) $(LIBS)
 
 clean:
 	/bin/rm $(OBJS)

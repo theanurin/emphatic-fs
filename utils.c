@@ -16,6 +16,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <errno.h>
 #include <err.h>
 
 #include "const.h"
@@ -60,12 +61,12 @@ safe_read ( fd, buffer, count )
     void *buffer;       // buffer to store data read.
     size_t count;       // number of bytes to be read.
 {
-    size_t nread;
+    int nread;
 
     if ( ( nread = read ( fd, buffer, count ) ) == -1 )
         err ( errno, "Error during read system call" );
 
-    return nread;
+    return (size_t) nread;
 }
 
     PUBLIC size_t
@@ -74,12 +75,12 @@ safe_write ( fd, buffer, count )
     const void *buffer; // data to write to the file.
     size_t count;       // number of bytes to write.
 {
-    size_t nwritten;
+    int nwritten;
 
     if ( ( nwritten = write ( fd, buffer, count ) ) == -1 )
         err ( errno, "Error during write system call" );
 
-    return nwritten;
+    return (size_t) nwritten;
 }
 
 /**

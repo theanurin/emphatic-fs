@@ -11,14 +11,20 @@
  *  Author: Matthew Signorini
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "mfatic-config.h"
 #include "const.h"
 #include "utils.h"
 #include "fat.h"
+#include "dostimes.h"
 #include "stat.h"
 
 
 // global pointer to information about the mounted volume.
-PRIVATE fat_volume_t *volume_info;
+PRIVATE const fat_volume_t *volume_info;
 
 
 /**
@@ -27,7 +33,7 @@ PRIVATE fat_volume_t *volume_info;
  */
     PUBLIC void
 stat_init (info)
-    const fat_volume_info *info;
+    const fat_volume_t *info;
 {
     volume_info = info;
 }
@@ -79,7 +85,7 @@ unpack_attributes (entry, buffer)
 
     // if the file has the read only attrubute set, remove any write
     // permissions.
-    if ((entry->attributes & ATTR_READONLY) != 0)
+    if ((entry->attributes & ATTR_READ_ONLY) != 0)
     {
         file_mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
     }

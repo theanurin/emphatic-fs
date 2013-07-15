@@ -7,13 +7,34 @@
  *  Author: Matthew Signorini
  */
 
+#include <unistd.h>
+#include <getopt.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <fuse.h>
 
-
+#include "mfatic-config.h"
 #include "const.h"
 #include "utils.h"
 #include "fat.h"
+#include "directory.h"
+#include "fat_alloc.h"
+#include "stat.h"
+#include "table.h"
+#include "create.h"
+#include "dostimes.h"
 #include "fileio.h"
+
+
+// minimum number of paramaters for mounting a volume, and offsets of
+// device and directory from the *end* of argv.
+#define MIN_ARGS                2
+#define DEVICE_INDEX            1
+#define MOUNTPOINT_INDEX        0
+
+// array indices for the two item array passed to the utimens method.
+#define ATIME_INDEX             0
+#define MTIME_INDEX             1
 
 
 // Declarations for methods to handle file operations on an mfatic file
@@ -30,14 +51,14 @@ PRIVATE int mfatic_statfs (const char *name, struct statvfs *st);
 PRIVATE int mfatic_mknod (const char *name, mode_t mode, dev_t dev);
 PRIVATE int mfatic_mkdir (const char *name, mode_t mode);
 PRIVATE int mfatic_unlink (const char *name);
-PRIVATE int mfatic_readdir (const char *path, void *buf, fuse_fill_dir_t
-  *filler, off_t offset, struct fuse_file_info *fd);
+PRIVATE int mfatic_readdir (const char *path, void *buf, 
+  fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fd);
 PRIVATE int mfatic_rename (const char *old, const char *new);
 PRIVATE int mfatic_truncate (const char *path, off_t length);
 PRIVATE int mfatic_utimens (const char *path, const struct timespec *tv);
 
 // functions used by the main program of the FUSE daemon.
-PRIVATE int parse_command_opts (int argc, char **argv);
+PRIVATE void parse_command_opts (int argc, char **argv);
 PRIVATE void init_volume (const char *devname, fat_volume_t **volinfo);
 PRIVATE bool verify_magic (const char *str1, const char *str2, 
   unsigned int length);
@@ -51,26 +72,7 @@ PRIVATE fat_volume_t *volume_info;
 // This struct is used by the main loop in the FUSE library to dispatch
 // to our methods for handling operations on an mfatic fs, such as open,
 // read write and so on.
-PRIVATE struct fuse_operations mfatic_callbacks =
-{
-    .init       = mfatic_mount,
-    .getattr    = mfatic_getattr,
-    .opendir    = mfatic_open,
-    .readdir    = mfatic_readdir,
-    .releasedir = mfatic_release,
-    .mknod      = mfatic_mknod,
-    .mkdir      = mfatic_mkdir,
-    .unlink     = mfatic_unlink,
-    .rmdir      = mfatic_unlink,
-    .rename     = mfatic_rename,
-    .truncate   = mfatic_truncate,
-    .utimens    = mfatic_utimens,
-    .open       = mfatic_open,
-    .read       = mfatic_read,
-    .write      = mfatic_write,
-    .release    = mfatic_release,
-    .statfs     = mfatic_statfs,
-};
+PRIVATE struct fuse_operations mfatic_callbacks;
 
 // pointer to a string containing the name of the device file that 
 // contains the file system being mounted.
@@ -86,6 +88,25 @@ main (argc, argv)
     char **argv;    // list of parameters.
 {
     int retval;
+
+    // initialise the FUSE callbacks structure.
+    mfatic_callbacks.getattr    = mfatic_getattr;
+    mfatic_callbacks.mknod      = mfatic_mknod;
+    mfatic_callbacks.mkdir      = mfatic_mkdir;
+    mfatic_callbacks.unlink     = mfatic_unlink;
+    mfatic_callbacks.rmdir      = mfatic_unlink;
+    mfatic_callbacks.rename     = mfatic_rename;
+    mfatic_callbacks.truncate   = mfatic_truncate;
+    mfatic_callbacks.open       = mfatic_open;
+    mfatic_callbacks.read       = mfatic_read;
+    mfatic_callbacks.write      = mfatic_write;
+    mfatic_callbacks.statfs     = mfatic_statfs;
+    mfatic_callbacks.release    = mfatic_release;
+    mfatic_callbacks.opendir    = mfatic_open;
+    mfatic_callbacks.readdir    = mfatic_readdir;
+    mfatic_callbacks.releasedir = mfatic_release;
+    mfatic_callbacks.init       = mfatic_mount;
+    mfatic_callbacks.utimens    = mfatic_utimens;
 
     // process any options salient to the FUSE daemon. This is only
     // really help and version; other options are passed on to the FUSE
@@ -154,7 +175,7 @@ mfatic_open (path, fd)
     }
 
     // save a pointer to the file struct.
-    fd->fh = newfile;
+    fd->fh = (int) newfile;
 
     return 0;
 }
@@ -188,7 +209,7 @@ mfatic_release (path, fd)
 mfatic_read (name, buf, nbytes, offset, fd)
     const char *name;           // file name. Unused.
     char *buf;                  // buffer to store data read.
-    int nbytes;                 // no of bytes to read.
+    size_t nbytes;              // no of bytes to read.
     off_t offset;               // where to start reading.
     struct fuse_file_info *fd;  // file handle.
 {
@@ -216,7 +237,7 @@ mfatic_read (name, buf, nbytes, offset, fd)
 mfatic_write (name, buf, nbytes, offset, fd)
     const char *name;           // file name. Not used.
     const char *buf;            // data to write to the file.
-    int nbytes;                 // length of the buffer.
+    size_t nbytes;              // length of the buffer.
     off_t offset;               // where to start writing.
     struct fuse_file_info *fd;  // file handle.
 {
@@ -243,7 +264,7 @@ mfatic_write (name, buf, nbytes, offset, fd)
  *  Return value is 0 on success or a negative errno on error.
  */
     PRIVATE int
-mfatic_getattr (path, stat)
+mfatic_getattr (path, st)
     const char *path;       // file to get information on.
     struct stat *st;        // buffer to store the information.
 {
@@ -342,7 +363,7 @@ mfatic_unlink (name)
 mfatic_readdir (path, buffer, filler, offset, fd)
     const char *path;               // directory name. Unused.
     void *buffer;                   // buffer to write info to.
-    fuse_fill_dir_t *filler;        // function to fill the buffer with.
+    fuse_fill_dir_t filler;         // function to fill the buffer with.
     off_t offset;                   // index of first direntry to read.
     struct fuse_file_info *fd;      // directory file handle.
 {
@@ -367,7 +388,7 @@ mfatic_readdir (path, buffer, filler, offset, fd)
         // unpack file attribute information from the directory entry.
         unpack_attributes (&entry, &attrs);
     }
-    while ((*filler) (buffer, entry->fname, &attrs, offset += 1) != 1);
+    while (filler (buffer, entry.fname, &attrs, offset += 1) != 1);
 
     return 0;
 }
@@ -398,7 +419,7 @@ mfatic_truncate (path, length)
     fat_file_t *fd;
     int retval;
     const char zero = '\0';
-    fat_cluster_t *prev = NULL;
+    cluster_list_t *prev = NULL;
     size_t oldsize;
 
     // open the target file.
@@ -421,7 +442,7 @@ mfatic_truncate (path, length)
 
         // now step through all the remaining clusters in the list, and
         // release them to the free space pool.
-        for (fat_cluster_t *cp = fd->current_cluster->next; cp != NULL;
+        for (cluster_list_t *cp = fd->current_cluster->next; cp != NULL;
           cp = cp->next)
         {
             release_cluster (cp->cluster_id);
@@ -429,13 +450,13 @@ mfatic_truncate (path, length)
             // release the previous item in the list, if there was a
             // previous.
             if (prev != NULL)
-                safe_free (&prev);
+                safe_free ((void **) &prev);
 
             prev = cp;
         }
 
         // release the last item in the linked list.
-        safe_free (&prev);
+        safe_free ((void **) &prev);
     }
     else if (oldsize < length)
     {
@@ -497,8 +518,8 @@ parse_command_opts (argc, argv)
     int argc;           // number of options given.
     char **argv;        // vector of text options.
 {
-    int option_index, c;
-    static struct options [] =
+    int index, c;
+    static const struct option opts [] =
     {
         {"help",    no_argument,    0, 'h'},
         {"version", no_argument,    0, 'v'},
@@ -507,8 +528,7 @@ parse_command_opts (argc, argv)
 
     // check for help or version options. getopt_long returns -1 once
     // we run out of command line parameters to process.
-    while ((c = getopt_long (argc, argv, "hv", options, &option_index))
-      != -1)
+    while ((c = getopt_long (argc, argv, "hv", opts, &index)) != -1)
     {
         switch (c)
         {
@@ -589,14 +609,14 @@ init_volume (devname, volinfo)
         // magics don't match. That would indicate that the device is not
         // formatted as a FAT file system, and we should not continue any
         // further with the mounting process.
-        fprintf (stderr, PROGNAME ": Error: Could not mount %s due to "
+        fprintf (stderr, "%s : Error: Could not mount %s due to "
           "bad magic.\n Are you sure it is a valid FAT32 file system?",
-          devname);
+          PROGNAME, devname);
         exit (1);
     }
 
     // fill in the volume info structure.
-    (*volinfo)->devfd = devfd;
+    (*volinfo)->dev_fd = devfd;
     (*volinfo)->bpb = sb;
     (*volinfo)->fsinfo = fsinfo;
 }
@@ -619,7 +639,7 @@ verify_magic (str1, str2, length)
 {
     // step along both strings until we either find a differing character,
     // or we reach the end, as specified by length.
-    for (int i = 0; i < length; i ++)
+    for (unsigned int i = 0; i < length; i ++)
     {
         if (str1 [i] != str2 [i])
             return false;
@@ -653,11 +673,11 @@ print_usage (void)
 print_version (void)
 {
     printf ("mfatic-fuse: FUSE mount tool for FAT32 file systems.\n\n"
-      "Version: " VERSION_STR "\n\n"
+      "Version: %s\n\n"
       "This is free and open source software. Please see the file COPYING\n"
       "for the terms under which you may use, modify and redistribute\n"
       "this software. This software has no warranty.\n\n"
-      COPYRIGHT_STR "\n");
+      "%s\n", VERSION_STR, COPYRIGHT_STR);
 }
 
 
