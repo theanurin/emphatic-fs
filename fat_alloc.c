@@ -10,6 +10,7 @@
 #include <unistd.h>     // needed for SEEK_SET
 
 #include "mfatic-config.h"
+#include "debug.h"
 #include "const.h"
 #include "utils.h"
 #include "fat.h"
@@ -29,7 +30,7 @@ struct free_region
 
 // local function declarations.
 PRIVATE void build_free_list (const fat_entry_t *buffer, size_t length,
-  struct free_region **list, bool *prev_alloced);
+  unsigned int index, struct free_region **list, bool *prev_alloced);
 
 // functions for reading salient items from the free space map.
 PRIVATE fat_cluster_t get_nearest_free (fat_cluster_t near);
@@ -82,6 +83,8 @@ init_clusters_map (v)
     nr_allocated_clusters = 0;
     nr_available_clusters = 0;
 
+    debug_print ("fat_alloc: preparing to scan FAT...\n");
+
     // FAT is stored in an integer number of sectors, so we will read it in
     // blocks of one sector.
     fat_entry_t *entry_buffer = safe_malloc (SECTOR_SIZE (v));
@@ -102,9 +105,10 @@ init_clusters_map (v)
     {
         // read the next sector from the FAT.
         safe_read (v->dev_fd, (void *) entry_buffer, SECTOR_SIZE (v));
+        debug_print ("fat_alloc: read %d FAT entries.\n", nr_entries);
 
         // step through the FAT entries, building the free list.
-        build_free_list (entry_buffer, nr_entries, &current, 
+        build_free_list (entry_buffer, nr_entries, i, &current, 
           &prev_alloced);
     }
 
@@ -251,9 +255,10 @@ release_cluster (c)
  *  Step through a buffer of FAT entries, and build a list of free regions.
  */
     PRIVATE void
-build_free_list (buffer, length, list, prev_alloced)
+build_free_list (buffer, length, index, list, prev_alloced)
     const fat_entry_t *buffer;  // buffer of FAT entries.
     size_t length;              // number of entries in the buffer.
+    unsigned int index;         // which sector of the FAT is this.
     struct free_region **list;  // points to the pointer to end of list.
     bool *prev_alloced;         // true if the last FAT entry allocated.
 {
@@ -276,11 +281,14 @@ build_free_list (buffer, length, list, prev_alloced)
 
                 // create the new item, and link into the list.
                 new = safe_malloc (sizeof (struct free_region));
-                new->start = buffer [i];
+                new->start = (index * length) + i;
                 new->length = 1;
                 new->next = NULL;
                 (*list)->next = new;
                 *list = new;
+
+                debug_print ("fat_alloc: new region of free clusters "
+                  "starts at %d\n", new->start);
             }
             else
             {
@@ -294,6 +302,12 @@ build_free_list (buffer, length, list, prev_alloced)
         }
         else
         {
+            if (*prev_alloced != true)
+            {
+                debug_print ("fat_alloc: free region length was %d\n",
+                  (*list)->length);
+            }
+
             // record for the next iteration that the last FAT entry was
             // allocated to a file.
             *prev_alloced = true;

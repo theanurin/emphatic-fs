@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <stdarg.h>
 
 #include "const.h"
 #include "debug.h"
@@ -32,7 +33,7 @@ debug_init (file_name)
 
     // open the log file. If it fails, we will print an error message
     // to stderr.
-    if ((logfd = fopen (file_name, "a")) == NULL)
+    if ((logfd = fopen (file_name, "w")) == NULL)
     {
         fprintf (stderr, "mfatic-fuse: fopen: Could not open %s: %s\n",
           file_name, strerror (errno));
@@ -44,14 +45,21 @@ debug_init (file_name)
  *  Print a debugging message to the log file.
  */
     PUBLIC void
-debug_print (message)
-    const char *message;        // message to print.
+debug_print (format)
+    const char *format;         // printf style format string.
 {
+    va_list args;
+
+    va_start (args, format);
+
     // check that we have a log file to write to.
     if (logfd == NULL)
         return;
 
-    fprintf (logfd, "%s", message);
+    vfprintf (logfd, format, args);
+    fflush (logfd);
+
+    va_end (args);
 }
 
 

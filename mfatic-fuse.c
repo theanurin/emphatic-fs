@@ -78,7 +78,7 @@ PRIVATE struct fuse_operations mfatic_callbacks;
 // pointer to a string containing the name of the device file that 
 // contains the file system being mounted.
 PRIVATE char *device_file;
-PRIVATE char *log_file_name = NULL;
+PRIVATE char *log_file_name = "mfatic.log";
 
 
 /**
@@ -122,6 +122,8 @@ main (argc, argv)
     // important structures.
     init_volume (device_file, &volume_info);
 
+    debug_print ("initial mounting complete. Entering FUSE framework...\n");
+
     // enter the FUSE framework. This will result in the program becoming
     // a daemon.
     retval = fuse_main (argc - 1, argv, &mfatic_callbacks, NULL);
@@ -144,12 +146,16 @@ main (argc, argv)
 mfatic_mount (conn)
     struct fuse_conn_info *conn;    // ignored.
 {
+    debug_print ("init: Initialising components...\n");
+
     // call all the init functions.
     directory_init (volume_info);
     init_clusters_map (volume_info);
     fileio_init (volume_info);
     stat_init (volume_info);
     table_init (volume_info);
+
+    debug_print ("init: mounting complete. File system ready.\n");
 
     return NULL;
 }
@@ -523,7 +529,7 @@ parse_command_opts (argc, argv)
     int argc;           // number of options given.
     char **argv;        // vector of text options.
 {
-    int index, c;
+    int index = 0, c;
     static const struct option opts [] =
     {
         {"help",    no_argument,        0,  'h'},
@@ -593,6 +599,7 @@ init_volume (devname, volinfo)
 
     // open the device file. This will abort on errors.
     devfd = safe_open (devname, O_RDWR);
+    debug_print ("opened device file.\n");
 
     // now allocate memory for the various data structures.
     *volinfo = safe_malloc (sizeof (fat_volume_t));
@@ -602,6 +609,7 @@ init_volume (devname, volinfo)
     // read in the FAT32 super block (or BPB, if you are Old School).
     safe_seek (devfd, 0, SEEK_SET);
     safe_read (devfd, sb, sizeof (fat_super_block_t));
+    debug_print ("read super block.\n");
 
     // read in the fs info sector, field by field as it is not a one to
     // one mapping of the on disk structure (we ommit all the unused space
@@ -612,6 +620,7 @@ init_volume (devname, volinfo)
     safe_read (devfd, &(fsinfo->magic2), FSINFO_MAGIC2_LEN + 8);
     safe_seek (devfd, 12, SEEK_CUR);
     safe_read (devfd, &(fsinfo->magic3), FSINFO_MAGIC3_LEN);
+    debug_print ("read FSINFO sector. Checking magics...\n");
 
     // check fsinfo magics.
     if ((verify_magic (FSINFO_MAGIC1, fsinfo->magic1, FSINFO_MAGIC1_LEN) &&
@@ -627,6 +636,8 @@ init_volume (devname, volinfo)
           PROGNAME, devname);
         exit (1);
     }
+
+    debug_print ("magics ok.\n");
 
     // fill in the volume info structure.
     (*volinfo)->dev_fd = devfd;

@@ -10,7 +10,7 @@
 
 // functions for writing debug messages.
 extern void debug_init (const char *file_name);
-extern void debug_print (const char *message);
+extern void debug_print (const char *format, ...);
 
 
 #endif // MFATIC_DEBUG_H
