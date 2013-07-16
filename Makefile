@@ -7,8 +7,8 @@
 VERSION = 0.00.0
 RELEASE = Alpha
 
-SRC = create.c directory.c dostimes.c fat_alloc.c fileio.c inode_table.c \
-      mfatic-fuse.c stat.c table.c utils.c
+SRC = create.c directory.c debug.c dostimes.c fat_alloc.c fileio.c \
+      inode_table.c mfatic-fuse.c stat.c table.c utils.c
 OBJS = $(SRC:%.c=%.o)
 
 CC = gcc

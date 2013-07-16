@@ -16,3 +16,7 @@ tags
 
 # Ignore the program binary.
 mfatic-fuse
+*.image
+
+# Ignore the Depend file.
+Depend

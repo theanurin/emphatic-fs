@@ -14,6 +14,7 @@
 #include <fuse.h>
 
 #include "mfatic-config.h"
+#include "debug.h"
 #include "const.h"
 #include "utils.h"
 #include "fat.h"
@@ -29,8 +30,8 @@
 // minimum number of paramaters for mounting a volume, and offsets of
 // device and directory from the *end* of argv.
 #define MIN_ARGS                2
-#define DEVICE_INDEX            1
-#define MOUNTPOINT_INDEX        0
+#define DEVICE_INDEX            2
+#define MOUNTPOINT_INDEX        1
 
 // array indices for the two item array passed to the utimens method.
 #define ATIME_INDEX             0
@@ -77,6 +78,7 @@ PRIVATE struct fuse_operations mfatic_callbacks;
 // pointer to a string containing the name of the device file that 
 // contains the file system being mounted.
 PRIVATE char *device_file;
+PRIVATE char *log_file_name = NULL;
 
 
 /**
@@ -112,6 +114,9 @@ main (argc, argv)
     // really help and version; other options are passed on to the FUSE
     // framework.
     parse_command_opts (argc, argv);
+
+    // prepare for debug output.
+    debug_init (log_file_name);
 
     // attempt to open the device file, and read the super block and other
     // important structures.
@@ -521,14 +526,15 @@ parse_command_opts (argc, argv)
     int index, c;
     static const struct option opts [] =
     {
-        {"help",    no_argument,    0, 'h'},
-        {"version", no_argument,    0, 'v'},
-        {0,         0,              0, 0}
+        {"help",    no_argument,        0,  'h'},
+        {"version", no_argument,        0,  'v'},
+        {"log",     required_argument,  0,  'l'},
+        {0,         0,                  0,  0}
     };
 
     // check for help or version options. getopt_long returns -1 once
     // we run out of command line parameters to process.
-    while ((c = getopt_long (argc, argv, "hv", opts, &index)) != -1)
+    while ((c = getopt_long (argc, argv, "hvl:", opts, &index)) != -1)
     {
         switch (c)
         {
@@ -542,6 +548,13 @@ parse_command_opts (argc, argv)
             // print version info and exit.
             print_version ();
             exit (0);
+            break;
+
+        case 'l':
+            // argument is the name of a file to use to record debug
+            // messages.
+            log_file_name = optarg;
+            break;
         }
     }
 
