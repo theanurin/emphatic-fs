@@ -13,3 +13,6 @@ syntax: glob
 # Ignore any cscope databases or tags files.
 cscope.out
 tags
+
+# Ignore the program binary.
+mfatic-fuse
