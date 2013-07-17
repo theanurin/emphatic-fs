@@ -10,7 +10,6 @@
 #include <unistd.h>     // needed for SEEK_SET
 
 #include "mfatic-config.h"
-#include "debug.h"
 #include "const.h"
 #include "utils.h"
 #include "fat.h"
@@ -83,8 +82,6 @@ init_clusters_map (v)
     nr_allocated_clusters = 0;
     nr_available_clusters = 0;
 
-    debug_print ("fat_alloc: preparing to scan FAT...\n");
-
     // FAT is stored in an integer number of sectors, so we will read it in
     // blocks of one sector.
     fat_entry_t *entry_buffer = safe_malloc (SECTOR_SIZE (v));
@@ -105,7 +102,6 @@ init_clusters_map (v)
     {
         // read the next sector from the FAT.
         safe_read (v->dev_fd, (void *) entry_buffer, SECTOR_SIZE (v));
-        debug_print ("fat_alloc: read %d FAT entries.\n", nr_entries);
 
         // step through the FAT entries, building the free list.
         build_free_list (entry_buffer, nr_entries, i, &current, 
@@ -286,9 +282,6 @@ build_free_list (buffer, length, index, list, prev_alloced)
                 new->next = NULL;
                 (*list)->next = new;
                 *list = new;
-
-                debug_print ("fat_alloc: new region of free clusters "
-                  "starts at %d\n", new->start);
             }
             else
             {
@@ -302,12 +295,6 @@ build_free_list (buffer, length, index, list, prev_alloced)
         }
         else
         {
-            if (*prev_alloced != true)
-            {
-                debug_print ("fat_alloc: free region length was %d\n",
-                  (*list)->length);
-            }
-
             // record for the next iteration that the last FAT entry was
             // allocated to a file.
             *prev_alloced = true;
