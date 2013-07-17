@@ -356,7 +356,7 @@ do_io (fd, nbytes, buffer, safe_io)
         // seek to the correct offset within the correct cluster, as 
         // defined by the file offset.
         safe_seek (volume_info->dev_fd, 
-          CLUSTER_OFFSET (fd->v, this_cluster) + 
+          CLUSTER_OFFSET (volume_info, this_cluster) + 
           (fd->offset % cluster_size), SEEK_SET);
         safe_io (volume_info->dev_fd, buffer, block);
 

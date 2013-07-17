@@ -538,6 +538,12 @@ parse_command_opts (argc, argv)
         {0,         0,                  0,  0}
     };
 
+    // The command line may contain options intended for FUSE rather than
+    // Emphatic. In such a case, we do not want getopt_long to print an
+    // error message to stderr. Setting the opterr global suppresses that
+    // behaviour.
+    opterr = 0;
+
     // check for help or version options. getopt_long returns -1 once
     // we run out of command line parameters to process.
     while ((c = getopt_long (argc, argv, "hvl:", opts, &index)) != -1)

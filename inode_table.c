@@ -141,7 +141,7 @@ get_inode (list, inode)
     // traverse the list until we find a matching item.
     //
     // \begin{voodoo}
-    for ( ; (INODE (*list) != inode) && (*list != NULL); 
+    for ( ; ((*list != NULL) && INODE (*list) != inode); 
       list = (const file_list_t **) &((*list)->next))
     {
         ;

@@ -337,7 +337,7 @@ search_directory (dir, name, found, index)
     {
         // read the next entry. If we have reached the end of the file,
         // ie. read returns 0, then no match was found.
-        if (fat_read (dir, &found, sizeof (fat_direntry_t)) == 0)
+        if (fat_read (dir, found, sizeof (fat_direntry_t)) == 0)
             return false;
 
         // increment the index count.

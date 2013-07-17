@@ -214,14 +214,14 @@ lookup_item (found, key)
 
     // step through the cache from the start of the list (LRU end) until
     // we either find a matching item, or reach the end of the list.
-    for (cp = &(cache.lru); ((*cp)->key != key) && (*cp != NULL);
+    for (cp = &(cache.lru); (*cp != NULL) && ((*cp)->key != key);
       cp = &((*cp)->next))
     {
         ;
     }
 
     // have we found a match for the key?
-    if (cp != NULL)
+    if (*cp != NULL)
     {
         // yes. Point *found to the matching item, move the item to the
         // MRU end of the list and return true.
