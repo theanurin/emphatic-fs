@@ -47,6 +47,8 @@ PRIVATE int mfatic_write (const char *name, const char *buf, size_t nbytes,
   off_t off, struct fuse_file_info *fd);
 PRIVATE int mfatic_release (const char *name, struct fuse_file_info *fd);
 PRIVATE int mfatic_getattr (const char *name, struct stat *st);
+PRIVATE int mfatic_fgetattr (const char *name, struct stat *st,
+  fuse_file_info *file);
 PRIVATE int mfatic_statfs (const char *name, struct statvfs *st);
 PRIVATE int mfatic_mknod (const char *name, mode_t mode, dev_t dev);
 PRIVATE int mfatic_mkdir (const char *name, mode_t mode);
@@ -91,6 +93,7 @@ main (argc, argv)
 
     // initialise the FUSE callbacks structure.
     mfatic_callbacks.getattr    = mfatic_getattr;
+    mfatic_callbacks.fgetattr   = mfatic_fgetattr;
     mfatic_callbacks.mknod      = mfatic_mknod;
     mfatic_callbacks.mkdir      = mfatic_mkdir;
     mfatic_callbacks.unlink     = mfatic_unlink;
@@ -287,6 +290,25 @@ mfatic_getattr (path, st)
     unpack_attributes (&file_info, st);
 
     return 0;
+}
+
+/**
+ *  Support stats on an open file, by calling the ordinary getattr. Note
+ *  that without fgetattr, FUSE throws a tantrum, and returns EIO on every
+ *  request.
+ */
+    PRIVATE int
+mfatic_fgetattr (name, st, file)
+    const char *name;               // name of file to stat.
+    struct stat *st;                // buffer for results.
+    struct fuse_file_info *file;    // not used.
+{
+    int retval;
+
+    // handle fgetattr by calling getattr with the same path.
+    retval = mfatic_getattr (path, st);
+
+    return retval;
 }
 
 /**
