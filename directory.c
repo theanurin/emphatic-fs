@@ -67,6 +67,7 @@ fat_lookup_dir (path, buffer, parent, index)
     // first, we will convert all the path separators into null bytes,
     // so that the path becomes a collection of file name strings.
     remove_separators (file);
+    file += 1;
 
     // get the root directory entry, to begin the search.
     root_direntry (buffer);
@@ -75,7 +76,7 @@ fat_lookup_dir (path, buffer, parent, index)
     // buffer refers to, and copying file's dir entry into buffer.
     // Then file becomes the new parent, and the next string in the path
     // name becomes the new file.
-    do
+    while (*file != '\0')
     {
         fat_open_fd (buffer, 0, 0, &parent_fd);
 
@@ -105,7 +106,6 @@ fat_lookup_dir (path, buffer, parent, index)
         if (*file != '\0')
             fat_close (parent_fd);
     }
-    while (*file != '\0');
 
     // Store the file handle of the parent directory. The caller may add
     // this to the active directory list at their discretion.
