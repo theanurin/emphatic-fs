@@ -48,7 +48,7 @@ PRIVATE int mfatic_write (const char *name, const char *buf, size_t nbytes,
 PRIVATE int mfatic_release (const char *name, struct fuse_file_info *fd);
 PRIVATE int mfatic_getattr (const char *name, struct stat *st);
 PRIVATE int mfatic_fgetattr (const char *name, struct stat *st,
-  fuse_file_info *file);
+  struct fuse_file_info *file);
 PRIVATE int mfatic_statfs (const char *name, struct statvfs *st);
 PRIVATE int mfatic_mknod (const char *name, mode_t mode, dev_t dev);
 PRIVATE int mfatic_mkdir (const char *name, mode_t mode);
@@ -306,7 +306,7 @@ mfatic_fgetattr (name, st, file)
     int retval;
 
     // handle fgetattr by calling getattr with the same path.
-    retval = mfatic_getattr (path, st);
+    retval = mfatic_getattr (name, st);
 
     return retval;
 }
