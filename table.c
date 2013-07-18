@@ -169,12 +169,18 @@ add_to_mru (new_item)
         cache.available -= 1;
     }
 
-    // link the new item into the list.
-    new_item->next = cache.mru;
-    cache.mru = new_item;
+    // link the new item onto the tail of the list.
+    new_item->next = NULL;
 
-    if (cache.lru == NULL)
+    if (cache.mru == NULL)
+    {
         cache.lru = new_item;
+        cache.mru = new_item;
+    }
+    else
+    {
+        cache.mru->next = new_item;
+    }
 }
 
 /**
