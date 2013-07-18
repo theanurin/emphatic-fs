@@ -284,7 +284,8 @@ mfatic_getattr (path, st)
     }
 
     // we don't need to use the parent directory for anything further.
-    fat_close (parent_fd);
+    if (parent_fd != NULL)
+        fat_close (parent_fd);
 
     // extract the file's metadata from the directory entry.
     unpack_attributes (&file_info, st);

@@ -62,7 +62,7 @@ fat_lookup_dir (path, buffer, parent, index)
     unsigned int *index;        // put dir index here.
 {
     char *file = strdupa (path);
-    fat_file_t *parent_fd;
+    fat_file_t *parent_fd = NULL;
 
     // first, we will convert all the path separators into null bytes,
     // so that the path becomes a collection of file name strings.

@@ -130,6 +130,7 @@ fat_open (path, fd)
     fat_file_t **fd;        // file handle to fill in.
 {
     fat_file_t *pfd;
+    fat_entry_t inode = 0;
     unsigned int index;
     fat_direntry_t entry;
     int retval;
@@ -138,15 +139,21 @@ fat_open (path, fd)
     if ((retval = fat_lookup_dir (path, &entry, &pfd, &index)) != 0)
         return retval;
 
+    if (pfd != NULL)
+    {
+        inode = pfd->inode;
+    }
+
     // create a file structure.
-    if ((retval = fat_open_fd (&entry, pfd->inode, index, fd)) != 0)
+    if ((retval = fat_open_fd (&entry, inode, index, fd)) != 0)
     {
         fat_close (pfd);
         return retval;
     }
 
     // add reference for parent directory.
-    add_parent_dir (pfd);
+    if (pfd != NULL)
+        add_parent_dir (pfd);
 
     return 0;
 }
