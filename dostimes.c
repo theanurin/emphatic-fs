@@ -202,13 +202,16 @@ days_before (month, year)
 {
     unsigned int total_days = 0;
 
-    // don't include the current month's days in the total.
-    month -= 1;
+    // if month is zero, the result is zero. This statement is important,
+    // because if we subtract 1 from unsigned zero, it rolls over to
+    // INT_MAX.
+    if (month == 0)
+        return 0;
 
     // step month back to the start of the year, and add up the days in
     // each month. Note that this uses the arument in the stack, which is
     // a little terse...
-    for ( ; month > 0; month -= 1)
+    for (month -= 1; month != 0; month -= 1)
     {
         total_days += days_this_month (month, year);
     }
