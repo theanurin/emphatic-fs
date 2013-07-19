@@ -282,9 +282,11 @@ root_direntry (entry_buf)
 {
     // name is just '/'.
     entry_buf->fname [0] = '/';
+    entry_buf->fname [1] = '\0';
 
     // set the directory attribute bit.
     entry_buf->attributes = ATTR_DIRECTORY;
+    entry_buf->size = CLUSTER_SIZE (volume_info);
 
     // get the root directory cluster from the volume information struct.
     put_direntry_cluster (entry_buf, volume_info->bpb->root_cluster);

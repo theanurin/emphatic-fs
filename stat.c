@@ -93,6 +93,7 @@ unpack_attributes (entry, buffer)
     // store all the information in the stat structure.
     buffer->st_ino = DIR_CLUSTER_START (entry);
     buffer->st_mode = file_mode;
+    buffer->st_nlink = 1;
     buffer->st_size = entry->size;
     buffer->st_blksize = CLUSTER_SIZE (volume_info);
     buffer->st_blocks = nr_blocks;

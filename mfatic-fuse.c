@@ -407,6 +407,7 @@ mfatic_readdir (path, buffer, filler, offset, fd)
     {
         // read the next entry.
         fat_read (dirfd, &entry, sizeof (fat_direntry_t));
+        entry.fname [DIR_NAME_LEN - 1] = '\0';
 
         // unpack file attribute information from the directory entry.
         unpack_attributes (&entry, &attrs);

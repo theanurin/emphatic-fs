@@ -26,6 +26,7 @@
 PRIVATE unsigned int days_since_epoch (unsigned int year);
 PRIVATE unsigned int days_before (unsigned int month, unsigned int year);
 PRIVATE unsigned int days_this_month (unsigned int month, unsigned int year);
+PRIVATE bool is_leap_year (unsigned int year);
 
 
 /**
@@ -181,10 +182,10 @@ days_since_epoch (year)
 
     // step the year back to 1970, and add up all the days in each year
     // as we go.
-    for ( ; year >= 1970; year -= 1)
+    for (year -= 1; year >= 1970; year -= 1)
     {
         // add the number of days before the end of december to the total.
-        days += days_before (13, year);
+        days += (is_leap_year (year) == true) ? 366 : 365;
     }
 
     return days;
@@ -233,8 +234,7 @@ days_this_month (month, year)
     else if (month == 2)
     {
         // february has 28 days, or 29 on leap years.
-        if (((year % 4) == 0) && (((year % 100) != 0) || 
-              ((year % 400) == 0)))
+        if (is_leap_year (year) == true)
         {
             // leap year.
             days = 29;
@@ -251,6 +251,22 @@ days_this_month (month, year)
     }
 
     return days;
+}
+
+/**
+ *  Returns true if the given year is a leap year, or false if not.
+ */
+    PRIVATE bool
+is_leap_year (year)
+    unsigned int year;      // year to test.
+{
+    // leap years occurr when the year is a multiple of four, with the
+    // exception of multiples of 100, but not 400.
+    if (((year % 4) == 0) && (((year % 100) != 0) || ((year % 400) == 0)))
+        return true;
+
+    // otherwise, not a leap year.
+    return false;
 }
 
 
